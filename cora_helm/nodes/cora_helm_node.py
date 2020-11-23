@@ -8,6 +8,7 @@
 import sys
 import rospy
 from geometry_msgs.msg import TwistStamped
+from geographic_msgs.msg import GeoPointStamped
 from marine_msgs.msg import Helm, Heartbeat, KeyValue, NavEulerStamped
 from std_msgs.msg import String
 from std_msgs.msg import Float32, Float64
@@ -130,8 +131,13 @@ class CoraHelm:
         self.heading_pub.publish(nes)
 
     def gpsCallback(self,data):
-        print data
-
+        gps = GeoPointStamped()
+        gps.header = data.header
+        gps.position.latitude = data.latitude
+        gps.position.longitude = data.longitude
+        gps.position.altitude = data.altitude
+        self.position_pub.publish(gps)
+        
 
     def reconfigure_callback(self, config, level):
         self.speed_limiter = config['speed_limiter']
@@ -147,7 +153,9 @@ class CoraHelm:
         self.thruster_left_pub = rospy.Publisher('/cora/thrusters/left_thrust_cmd',Float32,queue_size=1)
         self.thruster_right_pub = rospy.Publisher('/cora/thrusters/right_thrust_cmd',Float32,queue_size=1)
         self.heading_pub = rospy.Publisher('/heading', NavEulerStamped,queue_size=1)
-        
+        self.position_pub = rospy.Publisher('/position', GeoPointStamped, queue_size = 5)
+        self.speed_pub = rospy.Publisher('/sog', TwistStamped, queue_size = 5)
+
         rospy.Subscriber('cmd_vel',TwistStamped,self.twistCallback)
         rospy.Subscriber('helm',Helm,self.helmCallback)
         rospy.Subscriber('/project11/piloting_mode', String, self.pilotingModeCallback)
