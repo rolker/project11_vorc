@@ -8,4 +8,5 @@ Project 11 and VORC Quick Start
   - https://github.com/osrf/vorc
   
 roslaunch vorc_gazebo marina.launch
+
 roslaunch project11_vorc cora_backseat.launch
