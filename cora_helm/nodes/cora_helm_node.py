@@ -14,6 +14,7 @@ from std_msgs.msg import String
 from std_msgs.msg import Float32, Float64
 from sensor_msgs.msg import Imu
 from sensor_msgs.msg import NavSatFix
+from tf.transformations import euler_from_quaternion
 import math 
 
 from dynamic_reconfigure.server import Server
@@ -126,8 +127,15 @@ class CoraHelm:
     def imuCallback(self,data):
         #self.heading = data.data+self.magnetic_declination
         nes = NavEulerStamped()
-        nes.header.stamp = rospy.get_rostime()
-        #nes.orientation.heading = self.heading
+        nes.header = data.header
+        
+        orientation_q = data.orientation
+        orientation_list = [orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w]
+        (roll, pitch, yaw) = euler_from_quaternion (orientation_list)
+        self.heading =90-math.degrees(yaw)
+        
+        nes.orientation.heading = self.heading
+        
         self.heading_pub.publish(nes)
 
     def gpsCallback(self,data):
