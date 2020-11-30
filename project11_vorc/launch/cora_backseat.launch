@@ -4,11 +4,14 @@
     <arg name="override_mpc" default="false"/>
     <node if="$(arg override_mpc)" pkg="path_follower" type="mpc_adapter_node" name="mpc_adapter"/>
     
-    <include file="$(find project11)/launch/vehicle_core.launch">
+    <include file="$(find project11_vorc)/launch/vehicle_core.launch">
         <arg name="host" value="localhost"/>
         <arg name="override_mpc" value="$(arg override_mpc)"/>
         <arg name="transform_params" default="/project11/transformations/static"/>
     </include>
+    
+    <include file="$(find project11_vorc)/launch/localization.launch"/>
+    
     <include file="$(find project11)/launch/operator_core.launch">
         <arg name="host" value="localhost"/>
         <arg name="operator_transformations" value="0"/>

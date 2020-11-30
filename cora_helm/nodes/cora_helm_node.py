@@ -86,26 +86,37 @@ class CoraHelm:
         rudder = max(-1.0,min(1.0,rudder))
         
         rudder_mag = abs(rudder)
-        inv_rudder_mag = 1.0-rudder_mag
+        thrust_mag = abs(thrust)
         
-        #reduce thrust while turning
-        thrust *= inv_rudder_mag
+        # calculate proportions to blend thrust and rudder
+        total_mag = thrust_mag+rudder_mag
+        if total_mag > 0:
+            thrust_proportion = thrust_mag/total_mag
+            rudder_proportion = rudder_mag/total_mag
+        else:
+            thrust_proportion = 0
+            rudder_proportion = 0
         
         #apply speed limiters
         thrust *= self.speed_limiter
         rudder *= self.turn_speed_limiter
         
-        t = thrust
+        t = thrust*thrust_proportion
 
+        # fwd/rev biases try to keep fwd/aft motion to zero while only turning
         fwd_bias = self.differential_bias*2.0
         rev_bias = (1.0-self.differential_bias)*2.0
         
+        #scale the biases to stay between 0 and 1
+        fwd_bias /= max(fwd_bias,rev_bias)
+        rev_bias /= max(fwd_bias,rev_bias)
+        
         if rudder > 0: #turning right
-            tl = t+(fwd_bias*rudder/2.0)
-            tr = t-(rev_bias*rudder/2.0)
+            tl = t+(fwd_bias*rudder*rudder_proportion)
+            tr = t-(rev_bias*rudder*rudder_proportion)
         else:
-            tl = t+(rev_bias*rudder/2.0)
-            tr = t-(fwd_bias*rudder/2.0)
+            tl = t+(rev_bias*rudder*rudder_proportion)
+            tr = t-(fwd_bias*rudder*rudder_proportion)
                     
         self.thruster_left_pub.publish(tl)
         self.thruster_right_pub.publish(tr)
