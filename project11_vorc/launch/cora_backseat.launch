@@ -13,6 +13,7 @@
     
     <include file="$(find project11_vorc)/launch/localization.launch"/>
     
+    <param name="allow_differential_drive" value="True"/>
     <include file="$(find project11)/launch/operator_core.launch">
         <arg name="host" value="localhost"/>
         <arg name="operator_transformations" value="0"/>
@@ -20,10 +21,18 @@
     </include>
     
     <include file="$(find project11)/launch/operator_ui.launch"/>
+    <include file="$(find project11_vorc)/launch/rviz.launch"/>
     
     <node pkg="cora_helm" type="cora_helm_node.py" name="cora_helm"/>
     <node pkg="octomap_server" type="octomap_server_node" name="octomap">
-        <remap from="cloud_in" to="/cora/sensors/lidars/front_lidar/points"/>
+        <remap from="cloud_in" to="/cora/sensors/lidars/front_lidar/points_filtered"/>
+        <param name="resolution" value="1.0"/>
+    </node>
+    
+    <node pkg="pointcloud2_spherical_filter" type="pointcloud2_spherical_filter_node" name="lidar_filter">
+        <remap from="input" to="/cora/sensors/lidars/front_lidar/points"/>
+        <remap from="output" to="/cora/sensors/lidars/front_lidar/points_filtered"/>
+        <param name="radius" value="5.0"/>
     </node>
     
 </launch>

@@ -9,7 +9,7 @@ import sys
 import rospy
 from geometry_msgs.msg import TwistStamped
 from geographic_msgs.msg import GeoPointStamped
-from marine_msgs.msg import Helm, Heartbeat, KeyValue, NavEulerStamped
+from marine_msgs.msg import Helm, Heartbeat, KeyValue, NavEulerStamped, DifferentialDrive
 from std_msgs.msg import String
 from std_msgs.msg import Float32, Float64
 from sensor_msgs.msg import Imu
@@ -33,6 +33,7 @@ class CoraHelm:
         self.heading = None
         
         self.helm_command = {}
+        self.dd_command = {}
         self.desired_command = {}
         
     def twistCallback(self,data):
@@ -41,6 +42,12 @@ class CoraHelm:
         self.helm_command['timestamp'] = data.header.stamp
         self.applyThrustRudder()
     
+    def differentialCallback(self,data):
+        self.dd_command['left'] = data.left_thrust
+        self.dd_command['right'] = data.right_thrust
+        self.dd_command['timestamp'] = data.header.stamp    
+        self.applyThrustRudder()
+        
     def helmCallback(self,data):
         self.helm_command['throttle'] = data.throttle
         self.helm_command['rudder'] = data.rudder
@@ -61,6 +68,13 @@ class CoraHelm:
         rudder = 0
         
         now = rospy.get_rostime()
+
+        if 'timestamp' in self.dd_command:
+            if (now - self.dd_command['timestamp']) < rospy.Duration.from_sec(0.5):
+                self.thruster_left_pub.publish(self.dd_command['left'])
+                self.thruster_right_pub.publish(self.dd_command['right'])
+                return
+                
         
         doDesired = True
         
@@ -185,6 +199,7 @@ class CoraHelm:
 
         rospy.Subscriber('cmd_vel',TwistStamped,self.twistCallback)
         rospy.Subscriber('helm',Helm,self.helmCallback)
+        rospy.Subscriber('differential_drive',DifferentialDrive,self.differentialCallback)
         rospy.Subscriber('/project11/piloting_mode', String, self.pilotingModeCallback)
         rospy.Subscriber('/cora/sensors/imu/imu/data', Imu, self.imuCallback)
         rospy.Subscriber('/cora/sensors/gps/gps/fix', NavSatFix, self.gpsCallback)

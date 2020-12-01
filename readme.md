@@ -6,7 +6,8 @@ Project 11 and VORC Quick Start
   - https://github.com/rolker/project11_vorc
   - https://github.com/osrf/vrx
   - https://github.com/osrf/vorc
-  
+  - https://github.com/rolker/pointcloud2_spherical_filter  
+
 roslaunch vorc_gazebo marina.launch
 
 roslaunch project11_vorc cora_backseat.launch

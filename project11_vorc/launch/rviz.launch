@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+
+<launch>
+  <arg name="rviz_config" default="$(find project11_vorc)/config/rviz_cora.rviz" />
+  <node pkg="rviz" type="rviz"
+        name="cora_visualization" args="-d $(arg rviz_config)" />
+</launch>
