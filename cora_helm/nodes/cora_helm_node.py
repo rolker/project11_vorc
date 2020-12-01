@@ -148,6 +148,11 @@ class CoraHelm:
         nes.orientation.heading = self.heading
         
         self.heading_pub.publish(nes)
+        
+        nes.orientation.pitch = math.degrees(pitch)
+        nes.orientation.roll = math.degrees(roll)
+        
+        self.posmv_orientation_pub.publish(nes)
 
     def gpsCallback(self,data):
         gps = GeoPointStamped()
@@ -156,6 +161,7 @@ class CoraHelm:
         gps.position.longitude = data.longitude
         gps.position.altitude = data.altitude
         self.position_pub.publish(gps)
+        self.posmv_position_pub.publish(data)
         
 
     def reconfigure_callback(self, config, level):
@@ -174,6 +180,8 @@ class CoraHelm:
         self.heading_pub = rospy.Publisher('/heading', NavEulerStamped,queue_size=1)
         self.position_pub = rospy.Publisher('/position', GeoPointStamped, queue_size = 5)
         self.speed_pub = rospy.Publisher('/sog', TwistStamped, queue_size = 5)
+        self.posmv_position_pub = rospy.Publisher('/posmv/position', NavSatFix, queue_size = 5)
+        self.posmv_orientation_pub = rospy.Publisher('/posmv/orientation', NavEulerStamped,queue_size=1)
 
         rospy.Subscriber('cmd_vel',TwistStamped,self.twistCallback)
         rospy.Subscriber('helm',Helm,self.helmCallback)

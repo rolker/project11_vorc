@@ -1,5 +1,6 @@
 <launch>
     <rosparam command="load" file="$(find project11_vorc)/parameters/vorc.yaml" />
+    <param name="/project11/base_link_prefix" value="cora/"/>
     
     <arg name="override_mpc" default="false"/>
     <node if="$(arg override_mpc)" pkg="path_follower" type="mpc_adapter_node" name="mpc_adapter"/>
@@ -21,5 +22,8 @@
     <include file="$(find project11)/launch/operator_ui.launch"/>
     
     <node pkg="cora_helm" type="cora_helm_node.py" name="cora_helm"/>
+    <node pkg="octomap_server" type="octomap_server_node" name="octomap">
+        <remap from="cloud_in" to="/cora/sensors/lidars/front_lidar/points"/>
+    </node>
     
 </launch>

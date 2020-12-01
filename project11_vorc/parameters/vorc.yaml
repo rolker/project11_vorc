@@ -6,4 +6,4 @@ mission_manager/hover_maximum_distance: 50.0
 mission_manager/hover_maximum_speed: 1.0 # m/s
 
 project11/transformations/static:
- - { header: {frame_id: "base_link"}, child_frame_id: "cora/front_left_camera", transform: {translation: {x: 0.0, y: 0.0, z: 0.0}, rotation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0} } }
+ - { header: {frame_id: "base_link"}, child_frame_id: "cora/base_link", transform: {translation: {x: 0.0, y: 0.0, z: 0.0}, rotation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0} } }
