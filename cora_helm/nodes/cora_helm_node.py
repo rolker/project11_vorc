@@ -3,7 +3,7 @@
 # Roland Arsenault
 # Center for Coastal and Ocean Mapping
 # University of New Hampshire
-# Copyright 2018, All rights reserved.
+# Copyright 2020, All rights reserved.
 
 import sys
 import rospy
@@ -197,7 +197,7 @@ class CoraHelm:
         self.posmv_position_pub = rospy.Publisher('/posmv/position', NavSatFix, queue_size = 5)
         self.posmv_orientation_pub = rospy.Publisher('/posmv/orientation', NavEulerStamped,queue_size=1)
 
-        rospy.Subscriber('cmd_vel',TwistStamped,self.twistCallback)
+        #rospy.Subscriber('cmd_vel',TwistStamped,self.twistCallback)
         rospy.Subscriber('helm',Helm,self.helmCallback)
         rospy.Subscriber('differential_drive',DifferentialDrive,self.differentialCallback)
         rospy.Subscriber('/project11/piloting_mode', String, self.pilotingModeCallback)

@@ -35,4 +35,8 @@
         <param name="radius" value="5.0"/>
     </node>
     
+    <node pkg="cora_helm" type="simple_differential_controller.py" name="simple_controller">
+        <remap from="odom" to="/cora/robot_localization/odometry/filtered"/>
+    </node>
+    
 </launch>
