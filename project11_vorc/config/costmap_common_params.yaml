@@ -1,0 +1,10 @@
+obstacle_range: 100
+raytrace_range: 120
+footprint: [[-6, 2], [3, 2], [6,1], [7.5, 0], [6,-1], [3,-2], [-6,-2]]
+#robot_radius: ir_of_robot
+inflation_radius: 10
+
+observation_sources: point_cloud_sensor
+
+point_cloud_sensor: {sensor_frame: cora/front_lidar_link, data_type: PointCloud2, topic: /cora/sensors/lidars/front_lidar/points_filtered, marking: true, clearing: false}
+

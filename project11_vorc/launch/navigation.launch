@@ -1,0 +1,32 @@
+<launch>
+    <node pkg="pointcloud2_spherical_filter" type="pointcloud2_spherical_filter_node" name="lidar_filter">
+        <remap from="input" to="/cora/sensors/lidars/front_lidar/points"/>
+        <remap from="output" to="/cora/sensors/lidars/front_lidar/points_filtered"/>
+        <param name="radius" value="5.0"/>
+    </node>
+    
+    <node pkg="octomap_server" type="octomap_server_node" name="octomap">
+        <remap from="cloud_in" to="/cora/sensors/lidars/front_lidar/points_filtered"/>
+        <param name="resolution" value="1.0"/>
+    </node>
+
+<!--    <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pc_to_laserscan">
+        <remap from="cloud_in" to="/cora/sensors/lidars/front_lidar/points_filtered"/>
+        <param name="range_max" value="75"/>
+        <param name="target_frame" value="cora/base_link"/>
+    </node>
+
+    <node pkg="gmapping" type="slam_gmapping" name="gmapping">
+        <param name="base_frame" value="cora/base_link"/>
+        <param name="map_update_interval" value="1.0"/>
+        <param name="delta" value="1.0"/> <!- -map resolution- ->
+    </node>-->
+    
+    <node pkg="move_base" type="move_base" name="move_base">
+        <rosparam file="$(find project11_vorc)/config/costmap_common_params.yaml" command="load" ns="global_costmap" /> 
+        <rosparam file="$(find project11_vorc)/config/costmap_common_params.yaml" command="load" ns="local_costmap" />
+        <rosparam file="$(find project11_vorc)/config/local_costmap_params.yaml" command="load" />
+        <rosparam file="$(find project11_vorc)/config/global_costmap_params.yaml" command="load" /> 
+        <rosparam file="$(find project11_vorc)/config/base_local_planner_params.yaml" command="load" />
+    </node>
+</launch>

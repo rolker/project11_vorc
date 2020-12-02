@@ -28,26 +28,21 @@ def cmd_callback(data):
     last_command_time = datetime.datetime.now()
     
 def odom_callback(data):
-    desired_linear = 0
-    desired_angular = 0
     if last_command is not None and last_command_time is not None and datetime.datetime.now()-last_command_time < datetime.timedelta(seconds=0.5):
-        desired_linear = last_command.linear.x
-        desired_angular = last_command.angular.z
+        linear_pid.set_point = last_command.linear.x
+        angular_pid.set_point = last_command.angular.z
         
-    linear_pid.set_point = desired_linear
-    angular_pid.set_point = desired_angular
-    
-    linear = linear_pid.update(data.twist.twist.linear.x)
-    angular = angular_pid.update(data.twist.twist.angular.z) # positive is conter-clockwase
+        linear = linear_pid.update(data.twist.twist.linear.x)
+        angular = angular_pid.update(data.twist.twist.angular.z) # positive is conter-clockwase
 
-    right = linear + angular
-    left = linear - angular
-    
-    dd = DifferentialDrive()
-    dd.header.stamp = data.header.stamp
-    dd.left_thrust = left
-    dd.right_thrust = right
-    differential_pub.publish(dd)
+        right = linear + angular
+        left = linear - angular
+        
+        dd = DifferentialDrive()
+        dd.header.stamp = data.header.stamp
+        dd.left_thrust = left
+        dd.right_thrust = right
+        differential_pub.publish(dd)
     
     
 

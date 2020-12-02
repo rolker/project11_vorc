@@ -1,42 +1,27 @@
 <launch>
     <rosparam command="load" file="$(find project11_vorc)/parameters/vorc.yaml" />
-    <param name="/project11/base_link_prefix" value="cora/"/>
-    
-    <arg name="override_mpc" default="false"/>
-    <node if="$(arg override_mpc)" pkg="path_follower" type="mpc_adapter_node" name="mpc_adapter"/>
-    
-    <include file="$(find project11_vorc)/launch/vehicle_core.launch">
-        <arg name="host" value="localhost"/>
-        <arg name="override_mpc" value="$(arg override_mpc)"/>
-        <arg name="transform_params" default="/project11/transformations/static"/>
-    </include>
-    
+
     <include file="$(find project11_vorc)/launch/localization.launch"/>
     
-    <param name="allow_differential_drive" value="True"/>
-    <include file="$(find project11)/launch/operator_core.launch">
-        <arg name="host" value="localhost"/>
-        <arg name="operator_transformations" value="0"/>
-        <arg name="operator_joystick" value="1"/>
-    </include>
-    
-    <include file="$(find project11)/launch/operator_ui.launch"/>
-    <include file="$(find project11_vorc)/launch/rviz.launch"/>
+    <include file="$(find project11_vorc)/launch/viz.launch"/>
     
     <node pkg="cora_helm" type="cora_helm_node.py" name="cora_helm"/>
-    <node pkg="octomap_server" type="octomap_server_node" name="octomap">
-        <remap from="cloud_in" to="/cora/sensors/lidars/front_lidar/points_filtered"/>
-        <param name="resolution" value="1.0"/>
-    </node>
-    
-    <node pkg="pointcloud2_spherical_filter" type="pointcloud2_spherical_filter_node" name="lidar_filter">
-        <remap from="input" to="/cora/sensors/lidars/front_lidar/points"/>
-        <remap from="output" to="/cora/sensors/lidars/front_lidar/points_filtered"/>
-        <param name="radius" value="5.0"/>
-    </node>
-    
+
     <node pkg="cora_helm" type="simple_differential_controller.py" name="simple_controller">
         <remap from="odom" to="/cora/robot_localization/odometry/filtered"/>
     </node>
     
+    <include file="$(find project11_vorc)/launch/navigation.launch"/>
+
+    <node pkg="joy" type="joy_node" name="joy_node">
+        <param name="autorepeat_rate" value="10.0"/>
+    </node>
+    
+    <param name="allow_differential_drive" value="True"/>
+    <node pkg="joy_to_helm" type="joy_to_helm.py" name="joy_to_helm"/>
+
+    <node pkg="command_bridge" type="command_bridge_sender_node.py" name="command_bridge_sender"/>
+    <node pkg="command_bridge" type="command_bridge_receiver_node.py" name="command_bridge_receiver"/>
+
+    <node pkg="camp" type="AutonomousMissionPlanner" name="camp"  args="$(find camp)/workspace/"/>
 </launch>
