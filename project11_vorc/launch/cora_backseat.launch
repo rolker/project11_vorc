@@ -23,5 +23,5 @@
     <node pkg="command_bridge" type="command_bridge_sender_node.py" name="command_bridge_sender"/>
     <node pkg="command_bridge" type="command_bridge_receiver_node.py" name="command_bridge_receiver"/>
 
-    <node pkg="camp" type="AutonomousMissionPlanner" name="camp"  args="$(find camp)/workspace/"/>
+    <node pkg="camp" type="AutonomousMissionPlanner" name="camp"  args="$(find project11_vorc)/charts/ $(find project11_vorc)/charts/L16-23800-34552-16-16_16.kap"/>
 </launch>
