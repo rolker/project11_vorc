@@ -14,7 +14,13 @@ class PID:
         self.integral = 0
         
         self.debug = {}
-        
+
+    def setPIDparameters(self,Kp,Ki,Kd,windup_limit):
+        self.Kp = Kp
+        self.Ki = Ki
+        self.Kd = Kd
+        self.windup_limit = windup_limit
+
     def update(self, measured_value, timestamp=None):
         self.debug['Kp'] = self.Kp
         self.debug['Ki'] = self.Ki
