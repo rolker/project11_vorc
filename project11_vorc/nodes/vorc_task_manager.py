@@ -19,6 +19,7 @@ from geographic_visualization_msgs.msg import GeoVizItem, GeoVizPointList
 from robot_localization.srv import *
 
 import move_base_msgs.msg
+import dp_hover.msg
 
 
 rospy.init_node('vorc_task_manager')
@@ -62,15 +63,27 @@ def timer_callback(event):
             
         if goal is not None:
             goal_map = fromLL(goal.pose.position.latitude, goal.pose.position.longitude, goal.pose.position.altitude)
-            mbg = move_base_msgs.msg.MoveBaseGoal()
-            mbg.target_pose.header.frame_id = 'map'
-            mbg.target_pose.header.stamp = rospy.get_rostime()
-            mbg.target_pose.pose.position = goal_map
-            mbg.target_pose.pose.orientation = goal.pose.orientation
+            
+            hg = dp_hover.msg.dp_hoverGoal()
+            hg.target.header.frame_id = 'map'
+            hg.target.header.stamp = rospy.get_rostime()
+            hg.target.pose.position = goal_map
+            hg.target.pose.orientation = goal.pose.orientation
+            
+            dp_hover_action_client.wait_for_server()
+            dp_hover_action_client.send_goal(hg,dp_hover_done_callback, None, dp_hover_feedback_callback)
+            
+            status = 'dp_hover'
+            
+            #mbg = move_base_msgs.msg.MoveBaseGoal()
+            #mbg.target_pose.header.frame_id = 'map'
+            #mbg.target_pose.header.stamp = rospy.get_rostime()
+            #mbg.target_pose.pose.position = goal_map
+            #mbg.target_pose.pose.orientation = goal.pose.orientation
 
-            move_base_action_client.wait_for_server()
-            move_base_action_client.send_goal(mbg,move_base_done_callback, None, move_base_feedback_callback)
-            status = 'move_base'
+            #move_base_action_client.wait_for_server()
+            #move_base_action_client.send_goal(mbg,move_base_done_callback, None, move_base_feedback_callback)
+            #status = 'move_base'
 
 rospy.Timer(rospy.Duration(.2), timer_callback)
 
@@ -143,6 +156,19 @@ def move_base_done_callback(state, result):
 
 def move_base_feedback_callback(feedback):
     pass
+
+#
+# dp_hover stuff
+#
+dp_hover_action_client = actionlib.SimpleActionClient('DP_hover_action', dp_hover.msg.dp_hoverAction)
+
+def dp_hover_done_callback(state, result):
+    global status
+    status = 'idle'
+
+def dp_hover_feedback_callback(feedback):
+    pass
+
 
 #
 # localization stuff

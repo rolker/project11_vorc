@@ -12,6 +12,8 @@
     
     <include file="$(find project11_vorc)/launch/navigation.launch"/>
     
+    <node pkg="dp_hover" type="dp_hover_node" name="dp_hover"/>
+    
     <node pkg="project11_vorc" type="vorc_task_manager.py" name="task_manager"/>
 
     
