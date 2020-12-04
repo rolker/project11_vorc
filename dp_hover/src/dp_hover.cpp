@@ -4,13 +4,16 @@
 #include "dp_hover/dp_hoverAction.h"
 #include "actionlib/server/simple_action_server.h"
 #include "marine_msgs/NavEulerStamped.h"
-#include "geometry_msgs/TwistStamped.h"
+#include "geometry_msgs/Twist.h"
+#include "geometry_msgs/PoseStamped.h"
 #include "geographic_msgs/GeoPointStamped.h"
+#include "nav_msgs/Odometry.h"
 #include "geographic_visualization_msgs/GeoVizItem.h"
 #include "std_msgs/String.h"
 #include "dynamic_reconfigure/server.h"
 #include "dp_hover/dp_hoverConfig.h"
 #include "tf/tf.h"
+#include "math.h"
 
 #define PI 3.14159
 
@@ -23,10 +26,14 @@ public:
         m_desired_heading_pub = m_node_handle.advertise<marine_msgs::NavEulerStamped>("/project11/desired_heading",1);
         m_desired_speed_pub = m_node_handle.advertise<geometry_msgs::TwistStamped>("/project11/desired_speed",1);
         m_display_pub = m_node_handle.advertise<geographic_visualization_msgs::GeoVizItem>("/project11/display",5);
-        
+        m_desiredTwistCmd_pub = m_node_handle.advertise<geometry_msgs::Twist>("/cmd_vel",1);
+
+        /*
         m_position_sub = m_node_handle.subscribe("/position", 10, &DP_Hover::positionCallback, this);
         m_heading_sub = m_node_handle.subscribe("/heading",10, &DP_Hover::headingCallback, this);
+        */
 
+        m_navstate_sub = m_node_handle.subscribe("/cora/robot_localization/odometry/filtered",10, &DP_Hover::navStateCallback, this);
         m_state_sub = m_node_handle.subscribe("/project11/piloting_mode", 10, &DP_Hover::stateCallback, this);
 
         dynamic_reconfigure::Server<dp_hover::dp_hoverConfig>::CallbackType f;
@@ -43,6 +50,84 @@ public:
     {
     }
 
+    void navStateCallback(const nav_msgs::Odometry::ConstPtr &inmsg) {
+
+
+        //if(m_action_server.isActive() && m_autonomous_state) {
+        if(m_action_server.isActive()) {
+
+
+            float timedelta;
+            double now = ros::Time::now().toSec();
+            if (lastOdomTime == 0) { lastOdomTime = now;}
+            timedelta = now - lastOdomTime;
+
+            // Calculate relation of vehilce to hover point goal:
+            double roll, pitch, yaw, yawerror, range, yaw_to_dp_point;
+            double dx, dy;
+            // Range:
+            dx = inmsg->pose.pose.position.x - m_target_position[0];
+            dx = inmsg->pose.pose.position.y - m_target_position[1];
+            range = sqrt((dx * dx) + (dy * dy));
+
+            // Yaw to hover point:
+            yaw_to_dp_point = atan2(dx, dy);
+
+            // Yaw error
+            tf::Quaternion q(
+                    inmsg->pose.pose.orientation.x,
+                    inmsg->pose.pose.orientation.y,
+                    inmsg->pose.pose.orientation.z,
+                    inmsg->pose.pose.orientation.w);
+            tf::Matrix3x3 m(q);
+
+            m.getRPY(roll, pitch, yaw);
+
+            yawerror = yaw - m_target_yaw;
+
+            // Calculate commands to achive dp_hover.
+            geometry_msgs::Twist cmd;
+
+            // Set the time.
+            //ros::Time now = ros::Time::now();
+            //cmd.header.stamp = now;
+
+            // Implements linear variation of speed between min and max distance.
+            if (range >= m_maximum_distance)
+            {
+            cmd.linear.x = m_maximum_speed;
+            cmd.angular.z = yaw - yaw_to_dp_point;
+            }
+            else if (range > m_minimum_distance)
+            {
+                float p = (range - m_minimum_distance)/(m_maximum_distance - m_minimum_distance);
+                cmd.linear.x = p*m_maximum_speed;
+                cmd.angular.z = yaw - yaw_to_dp_point;
+            }
+
+            // If we can get within some minimum distance, try to sit still and just adjust our heading
+            if (inmsg->twist.twist.linear.x < 1.0) {
+                cmd.linear.x = 0.0;
+                cmd.angular.z = yawerror;
+            }
+
+            // Rate limit commands to keep Gazebo from crashing.
+            if (timedelta > 0.2) {
+                m_desiredTwistCmd_pub.publish(cmd);
+                lastOdomTime = ros::Time::now().toSec();
+                ROS_INFO("Sending Twist on /cmd_vel!");
+
+            }
+            // Send feedback.
+            dp_hover::dp_hoverFeedback feedback;
+            feedback.range = range;
+            feedback.yawerror = yawerror;
+            feedback.speed = cmd.linear.x;
+            m_action_server.publishFeedback(feedback);
+        }
+
+    }
+    /*
     void GeoPoseTORPHeading(geographic_msgs::GeoPoseStamped Gmsg, double *roll, double *pitch, double *heading) {
 
         tf::Quaternion q(
@@ -55,16 +140,28 @@ public:
         m.getRPY(*roll,*pitch,yaw);
         *heading =  fmod((PI/2.0 - yaw * PI/180.0) + 360.0, 360.0);
     }
-    
+     */
+
+
+
     void goalCallback()
     {
         auto goal = m_action_server.acceptNewGoal();
-        
-        m_target_position[0] = goal->target.pose.position.latitude;
-        m_target_position[1] = goal->target.pose.position.longitude;
-        double roll, pitch;
-        GeoPoseTORPHeading(goal->target,&roll, &pitch, &m_target_heading);
-        ROS_INFO("GOAL: %0.9f,%0.9f  %0.3f", m_target_position[0],m_target_position[1],m_target_heading);
+        m_target_position[0] = goal->target.pose.position.x;
+        m_target_position[1] = goal->target.pose.position.y;
+
+        tf::Quaternion q(
+                goal->target.pose.orientation.x,
+                goal->target.pose.orientation.y,
+                goal->target.pose.orientation.z,
+                goal->target.pose.orientation.w);
+        tf::Matrix3x3 m(q);
+        double roll, pitch, yaw;
+        m.getRPY(roll,pitch,yaw);
+
+        m_target_yaw = yaw;
+
+        ROS_INFO("DP_HOVER GOAL: %0.9f,%0.9f  %0.3f", m_target_position[0],m_target_position[1],m_target_yaw);
 
         sendDisplay();
     }
@@ -168,6 +265,7 @@ public:
         m_heading = msg->orientation.heading;
     }
 
+    /*
     void positionCallback(const geographic_msgs::GeoPointStamped::ConstPtr& inmsg)
     {
         if(m_action_server.isActive() && m_autonomous_state)
@@ -205,6 +303,7 @@ public:
             m_desired_speed_pub.publish(desired_speed);
         }
     }
+     */
     
     void stateCallback(const std_msgs::String::ConstPtr &inmsg)
     {
@@ -227,23 +326,28 @@ private:
     
     ros::Publisher m_desired_speed_pub;
     ros::Publisher m_desired_heading_pub;
+    ros::Publisher m_desiredTwistCmd_pub;
     ros::Publisher m_display_pub;
     ros::Subscriber m_position_sub;
     ros::Subscriber m_heading_sub;
     ros::Subscriber m_state_sub;
+    ros::Subscriber m_navstate_sub;
+
+    double lastOdomTime;
     
     dynamic_reconfigure::Server<dp_hover::dp_hoverConfig> m_config_server;
 
     // goal variables
     gz4d::geo::Point<double,gz4d::geo::WGS84::LatLon> m_target_position;
-    double m_target_heading = 0.0;
+    double m_target_yaw;
     
     float m_minimum_distance; // meters
     float m_maximum_distance; // meters
     float m_maximum_speed;    // m/s
     bool m_autonomous_state;
+
     double m_heading;
-    
+
 };
 
 int main(int argc, char **argv)
