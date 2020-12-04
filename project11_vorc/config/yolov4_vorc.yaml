@@ -10,3 +10,6 @@ yolo_model:
     names:
       - green_totem
       - buoy_red
+
+image_view:
+  enable_opencv: false
