@@ -22,12 +22,13 @@ class PID:
         self.debug['set_point'] = self.set_point
         self.debug['windup_limit'] = self.windup_limit
 
+        #print("%0.2f, %0.3f" % (self.set_point, measured_value))
         error = self.set_point - measured_value
         self.debug['error'] = error
 
         if timestamp is None:
             timestamp = datetime.datetime.now()
-            
+
         dt = None
         if self.last_timestamp is not None:
             dt = timestamp - self.last_timestamp
@@ -53,12 +54,12 @@ class PID:
         self.debug['derivative'] = derivative
             
         self.last_error = error
-        
+
         self.debug['p'] = self.Kp*error
         self.debug['i'] = self.Ki*self.integral
         self.debug['d'] = self.Kd*derivative
         self.debug['return'] = self.Kp*error + self.Ki*self.integral + self.Kd*derivative
-        
+
         return self.Kp*error + self.Ki*self.integral + self.Kd*derivative
 
         

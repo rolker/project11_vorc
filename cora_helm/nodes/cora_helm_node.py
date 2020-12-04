@@ -74,14 +74,14 @@ class CoraHelm:
                 self.thruster_left_pub.publish(self.dd_command['left'])
                 self.thruster_right_pub.publish(self.dd_command['right'])
                 return
-                
+
         
         doDesired = True
-        
+
         if 'timestamp' in self.helm_command:
             if (now - self.helm_command['timestamp']) < rospy.Duration.from_sec(0.5):
                 doDesired = False
-                
+
         if doDesired:
             if 'heading_timestamp' in self.desired_command and 'speed_timestamp' in self.desired_command and (now - self.desired_command['heading_timestamp']) < rospy.Duration.from_sec(0.5) and (now - self.desired_command['speed_timestamp']) < rospy.Duration.from_sec(0.5):
                 delta_heading = self.desired_command['heading'] - self.heading
@@ -94,7 +94,7 @@ class CoraHelm:
         else:
             thrust = self.helm_command['throttle']
             rudder = self.helm_command['rudder']
-        
+
         #clamp values to range -1 to 1
         thrust = max(-1.0,min(1.0,thrust))
         rudder = max(-1.0,min(1.0,rudder))
@@ -110,7 +110,8 @@ class CoraHelm:
         else:
             thrust_proportion = 0
             rudder_proportion = 0
-        
+
+
         #apply speed limiters
         thrust *= self.speed_limiter
         rudder *= self.turn_speed_limiter
@@ -131,7 +132,7 @@ class CoraHelm:
         else:
             tl = t+(rev_bias*rudder*rudder_proportion)
             tr = t-(fwd_bias*rudder*rudder_proportion)
-                    
+
         self.thruster_left_pub.publish(tl)
         self.thruster_right_pub.publish(tr)
 

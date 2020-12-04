@@ -17,8 +17,14 @@ last_command_time = None
 
 differential_pub = None
 
-linear_pid = pid_controller.PID(.2,.1,0,10) #.3,.05,0
-angular_pid = pid_controller.PID(.5,.1,0,10) #150,0,0
+
+max_linear_speed = 30.0
+max_angular_speed = 0.39
+
+linear_pid = pid_controller.PID( Kp=0.3, Ki=.05 ,Kd=0.0 )
+angular_pid = pid_controller.PID( Kp=100, Ki=10 ,Kd=0.0 )
+linear_pid.windup_limit = 10
+angular_pid.windup_limit = 50
 
 def cmd_callback(data):
     global last_command
@@ -34,7 +40,7 @@ def odom_callback(data):
         
         linear = linear_pid.update(data.twist.twist.linear.x)
         angular = angular_pid.update(data.twist.twist.angular.z) # positive is conter-clockwase
-        
+
         right = linear + angular
         left = linear - angular
         

@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>dp_hover</name>
+  <version>0.0.0</version>
+  <description>The hover package. Implements an action that simulates being at anchor by hovering in place.</description>
+
+  <maintainer email="roland@ccom.unh.edu">Roland Arsenault</maintainer>
+
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>geometry_msgs</depend>
+  <depend>geographic_msgs</depend>
+  <depend>marine_msgs</depend>
+  <depend>roscpp</depend>
+  <depend>rosbag</depend>
+  <depend>project11</depend>
+  <depend>actionlib</depend>
+  <depend>actionlib_msgs</depend>
+  <depend>geographic_visualization_msgs</depend>
+  <depend>dynamic_reconfigure</depend>
+  <export>
+  </export>
+</package>
