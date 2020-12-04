@@ -40,6 +40,9 @@ public:
         f = boost::bind(&DP_Hover::reconfigureCallback, this,  _1, _2);
         m_config_server.setCallback(f);
 
+        // Get the default Kp PID value for heading so we can change it back later.
+        m_node_handle.getParam("/simple_differential_controller/angularPID_Kp", m_defaultAngularPID_Kp);
+
         
         m_action_server.registerGoalCallback(boost::bind(&DP_Hover::goalCallback, this));
         m_action_server.registerPreemptCallback(boost::bind(&DP_Hover::preemptCallback, this));
@@ -83,7 +86,12 @@ public:
             m.getRPY(roll, pitch, yaw);
 
             yawerror = m_target_yaw-yaw;
+            if (yawerror > PI) { yawerror = yawerror - 2*PI;}
+            if (yawerror < -PI) { yawerror = yawerror + 2*PI;}
+                
             float yaw_to_dp_point_difference = yaw_to_dp_point - yaw;
+            if (yaw_to_dp_point_difference > PI) { yaw_to_dp_point_difference = yaw_to_dp_point_difference - 2*PI;}
+            if (yaw_to_dp_point_difference < -PI) { yaw_to_dp_point_difference = yaw_to_dp_point_difference + 2*PI;}
 
             // Calculate commands to achive dp_hover.
             geometry_msgs::Twist cmd;
@@ -100,16 +108,18 @@ public:
             }
             else if (range > m_minimum_distance)
             {
-                float p = (range - m_minimum_distance)/(m_maximum_distance - m_minimum_distance);
+                float p = (range - m_minimum_distance)/(m_maximum_distance - m_minimum_distance) + 0.5;
                 cmd.linear.x = p*m_maximum_speed;
                 cmd.angular.z = std::max(-m_maximum_angular_speed,std::min(m_maximum_angular_speed, yaw_to_dp_point_difference));
             }
-            if(fabs(yaw_to_dp_point_difference) > 2.5) // are we pointng backwards?
+            
+            if(fabs(yaw_to_dp_point_difference) > 2.5 and range < 10.0) // are we pointng backwards?
                 cmd.linear.x = -cmd.linear.x;
-            else if(fabs(yaw_to_dp_point_difference) > 0.2) // don't go if we are not pointing the right way
+            else if(fabs(yaw_to_dp_point_difference) > 0.2 and range < 10.0) // don't go if we are not pointing the right way
                 cmd.linear.x = 0;
             
             // If we can get within some minimum distance, try to sit still and just adjust our heading
+            // Note angular PID will be changed below for this same condition.
             if (range < m_minimum_distance) {
                 cmd.linear.x = 0.0;
                 cmd.angular.z = std::max(-m_maximum_angular_speed,std::min(m_maximum_angular_speed,float(yawerror)));
@@ -120,6 +130,13 @@ public:
                 m_desiredTwistCmd_pub.publish(cmd);
                 lastOdomTime = now;
                 ROS_DEBUG("Sending Twist on /cmd_vel!");
+
+                if (range < m_minimum_distance) {
+                    m_node_handle.setParam("/simple_differential_controller/angularPID_Kp", 100.0);
+                } else {
+                    m_node_handle.setParam("/simple_differential_controller/angularPID_Kp",m_defaultAngularPID_Kp);
+                }
+
             }
             // Send feedback.
             dp_hover::dp_hoverFeedback feedback;
@@ -164,7 +181,7 @@ public:
 
         m_target_yaw = yaw;
 
-        ROS_INFO("DP_HOVER GOAL: %0.9f,%0.9f  %0.3f", m_target_position[0],m_target_position[1],m_target_yaw);
+        ROS_INFO("DP_HOVER GOAL: %0.2f,%0.2f  %0.2f", m_target_position[0],m_target_position[1],m_target_yaw);
 
         sendDisplay();
     }
@@ -352,6 +369,8 @@ private:
     bool m_autonomous_state;
 
     double m_heading;
+
+    double m_defaultAngularPID_Kp;
 
 };
 
