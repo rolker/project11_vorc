@@ -21,7 +21,7 @@ class DP_Hover
 {
 public:
     DP_Hover(std::string const &name):
-        m_action_server(m_node_handle, name, false),m_autonomous_state(false)
+        m_action_server(m_node_handle, name, false),m_autonomous_state(false),lastOdomTime(0.0)
     {
         m_desired_heading_pub = m_node_handle.advertise<marine_msgs::NavEulerStamped>("/project11/desired_heading",1);
         m_desired_speed_pub = m_node_handle.advertise<geometry_msgs::TwistStamped>("/project11/desired_speed",1);
@@ -57,21 +57,20 @@ public:
         if(m_action_server.isActive()) {
 
 
-            float timedelta;
             double now = ros::Time::now().toSec();
-            if (lastOdomTime == 0) { lastOdomTime = now;}
-            timedelta = now - lastOdomTime;
+            double timedelta = now - lastOdomTime;
 
-            // Calculate relation of vehilce to hover point goal:
+            // Calculate relation of vehicle to hover point goal:
             double roll, pitch, yaw, yawerror, range, yaw_to_dp_point;
             double dx, dy;
             // Range:
-            dx = inmsg->pose.pose.position.x - m_target_position[0];
-            dx = inmsg->pose.pose.position.y - m_target_position[1];
+            dx = m_target_position[0] - inmsg->pose.pose.position.x;
+            dy = m_target_position[1] - inmsg->pose.pose.position.y;
             range = sqrt((dx * dx) + (dy * dy));
 
             // Yaw to hover point:
-            yaw_to_dp_point = atan2(dx, dy);
+            yaw_to_dp_point = atan2(dy, dx);
+            ROS_DEBUG("yaw to hover point: %0.9f",yaw_to_dp_point);
 
             // Yaw error
             tf::Quaternion q(
@@ -83,7 +82,8 @@ public:
 
             m.getRPY(roll, pitch, yaw);
 
-            yawerror = yaw - m_target_yaw;
+            yawerror = m_target_yaw-yaw;
+            float yaw_to_dp_point_difference = yaw_to_dp_point - yaw;
 
             // Calculate commands to achive dp_hover.
             geometry_msgs::Twist cmd;
@@ -95,28 +95,31 @@ public:
             // Implements linear variation of speed between min and max distance.
             if (range >= m_maximum_distance)
             {
-            cmd.linear.x = m_maximum_speed;
-            cmd.angular.z = yaw - yaw_to_dp_point;
+                cmd.linear.x = m_maximum_speed;
+                cmd.angular.z = std::max(-m_maximum_angular_speed,std::min(m_maximum_angular_speed, yaw_to_dp_point_difference));
             }
             else if (range > m_minimum_distance)
             {
                 float p = (range - m_minimum_distance)/(m_maximum_distance - m_minimum_distance);
                 cmd.linear.x = p*m_maximum_speed;
-                cmd.angular.z = yaw - yaw_to_dp_point;
+                cmd.angular.z = std::max(-m_maximum_angular_speed,std::min(m_maximum_angular_speed, yaw_to_dp_point_difference));
             }
-
+            if(fabs(yaw_to_dp_point_difference) > 2.5) // are we pointng backwards?
+                cmd.linear.x = -cmd.linear.x;
+            else if(fabs(yaw_to_dp_point_difference) > 0.2) // don't go if we are not pointing the right way
+                cmd.linear.x = 0;
+            
             // If we can get within some minimum distance, try to sit still and just adjust our heading
-            if (inmsg->twist.twist.linear.x < 1.0) {
+            if (range < m_minimum_distance) {
                 cmd.linear.x = 0.0;
-                cmd.angular.z = yawerror;
+                cmd.angular.z = std::max(-m_maximum_angular_speed,std::min(m_maximum_angular_speed,float(yawerror)));
             }
 
             // Rate limit commands to keep Gazebo from crashing.
             if (timedelta > 0.2) {
                 m_desiredTwistCmd_pub.publish(cmd);
-                lastOdomTime = ros::Time::now().toSec();
-                ROS_INFO("Sending Twist on /cmd_vel!");
-
+                lastOdomTime = now;
+                ROS_DEBUG("Sending Twist on /cmd_vel!");
             }
             // Send feedback.
             dp_hover::dp_hoverFeedback feedback;
@@ -316,6 +319,7 @@ public:
         m_minimum_distance = config.minimum_distance;
         m_maximum_distance = config.maximum_distance;
         m_maximum_speed = config.maximum_speed;
+        m_maximum_angular_speed = config.maximum_angular_speed;
         sendDisplay();
     }
     
@@ -344,6 +348,7 @@ private:
     float m_minimum_distance; // meters
     float m_maximum_distance; // meters
     float m_maximum_speed;    // m/s
+    float m_maximum_angular_speed; // rad/s
     bool m_autonomous_state;
 
     double m_heading;
