@@ -2,3 +2,4 @@
 .idea/
 **/.idea/
 **/cmake-build-debug/
+project11_vorc/config/yolov4-obj_final.weights

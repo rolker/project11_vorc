@@ -9,6 +9,8 @@
   <include file="$(find darknet_ros)/launch/darknet_ros.launch">
     <arg name="network_param_file"    value="$(arg network_param_file)"/>
     <arg name="image" value="$(arg image)" />
+    <arg name="yolo_weights_path"          default="$(find project11_vorc)/config/"/>
+    <arg name="yolo_config_path"           default="$(find project11_vorc)/config/"/>
   </include>
 
 </launch>
