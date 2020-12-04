@@ -60,7 +60,7 @@ def odom_callback(data):
     # Don't check for new PID parameters more frequently that 1 Hz.
     if last_odom_time is None:
         last_odom_time = datetime.datetime.now()
-    if datetime.datetime.now() - last_odom_time >= datetime.timedelta(seconds=1.0):
+    if (datetime.datetime.now() - last_odom_time) >= datetime.timedelta(seconds=1.0):
         linearPID_Kp = rospy.get_param('/simple_differential_controller/linearPID_Kp')
         linearPID_Ki = rospy.get_param('/simple_differential_controller/linearPID_Ki')
         linearPID_Kd = rospy.get_param('/simple_differential_controller/linearPID_Kd')
