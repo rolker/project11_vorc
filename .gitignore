@@ -1,4 +1,6 @@
+*.kdev4
 *.pyc
+*kdev4/
 .idea/
 **/.idea/
 **/cmake-build-debug/
