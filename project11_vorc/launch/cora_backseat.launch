@@ -3,7 +3,6 @@
 
     <include file="$(find project11_vorc)/launch/localization.launch"/>
     
-    <include file="$(find project11_vorc)/launch/viz.launch"/>
     
     <node pkg="cora_helm" type="cora_helm_node.py" name="cora_helm"/>
 
@@ -12,6 +11,11 @@
     </node>
     
     <include file="$(find project11_vorc)/launch/navigation.launch"/>
+    
+    <node pkg="project11_vorc" type="vorc_task_manager.py" name="task_manager"/>
+
+    
+    <include file="$(find project11_vorc)/launch/viz.launch"/>
 
     <node pkg="joy" type="joy_node" name="joy_node">
         <param name="autorepeat_rate" value="10.0"/>

@@ -175,6 +175,8 @@ class CoraHelm:
         gps.position.longitude = data.longitude
         gps.position.altitude = data.altitude
         self.position_pub.publish(gps)
+
+    def gpsFilteredCallback(self,data):
         self.posmv_position_pub.publish(data)
         
 
@@ -203,7 +205,7 @@ class CoraHelm:
         rospy.Subscriber('/project11/piloting_mode', String, self.pilotingModeCallback)
         rospy.Subscriber('/cora/sensors/imu/imu/data', Imu, self.imuCallback)
         rospy.Subscriber('/cora/sensors/gps/gps/fix', NavSatFix, self.gpsCallback)
-        
+        rospy.Subscriber('/cora/robot_localization/gps/filtered', NavSatFix, self.gpsFilteredCallback)
         rospy.Subscriber('/project11/desired_speed', TwistStamped, self.desiredSpeedCallback)
         rospy.Subscriber('/project11/desired_heading', NavEulerStamped, self.desiredHeadingCallback)
     

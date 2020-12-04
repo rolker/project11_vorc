@@ -17,8 +17,8 @@ last_command_time = None
 
 differential_pub = None
 
-linear_pid = pid_controller.PID(.2,.1,0,10)
-angular_pid = pid_controller.PID(.5,.1,0,10)
+linear_pid = pid_controller.PID(.2,.1,0,10) #.3,.05,0
+angular_pid = pid_controller.PID(.5,.1,0,10) #150,0,0
 
 def cmd_callback(data):
     global last_command

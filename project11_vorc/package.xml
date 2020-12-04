@@ -10,6 +10,11 @@
 
   <buildtool_depend>catkin</buildtool_depend>
   <depend>project11</depend>
+  <depend>rospy</depend>
+  <depend>vrx_gazebo</depend>
+  <depend>geographic_msgs</depend>
+  <depend>marine_msgs</depend>
+  <depend>robot_localization</depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
