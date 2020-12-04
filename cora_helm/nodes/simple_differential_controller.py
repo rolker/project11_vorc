@@ -21,10 +21,10 @@ differential_pub = None
 max_linear_speed = 30.0
 max_angular_speed = 0.39
 
-linear_pid = pid_controller.PID( Kp=0.3, Ki=.05 ,Kd=0.0 )
-angular_pid = pid_controller.PID( Kp=100, Ki=10 ,Kd=0.0 )
-linear_pid.windup_limit = 10
-angular_pid.windup_limit = 50
+#linear_pid = pid_controller.PID( Kp=0.3, Ki=.05, Kd=0.0, windup_limit=10 )
+#angular_pid = pid_controller.PID( Kp=100, Ki=10 ,Kd=0.0, windup_limit=50 )
+linear_pid = pid_controller.PID( Kp=0.2, Ki=.1, Kd=0.0, windup_limit=10 )
+angular_pid = pid_controller.PID( Kp=.5, Ki=.1 ,Kd=0.0, windup_limit=10 )
 
 def cmd_callback(data):
     global last_command
