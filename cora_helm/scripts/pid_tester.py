@@ -22,7 +22,7 @@ def publish(pub,T,duration):
 
 
 T = Twist()
-T.linear.x = 4
+T.linear.x = -0.3
 T.angular.z = -.2
 duration = 20
 publish(pub,T,duration)
