@@ -119,7 +119,9 @@ def timer_callback(event):
             if dp_feedback is not None and dp_feedback.range < 1.0:
                 status = 'idle' # trigger jump to next waypoint
 
-rospy.Timer(rospy.Duration(.2), timer_callback)
+    if task is not None and task.name == 'perception':
+        perception_send_detects()
+
 
 #
 # move_base stuff
@@ -163,6 +165,19 @@ def fromLL(lat, lon, alt=0.0):
     except rospy.ServiceException as e:
         print("Service call failed: %s"%e)
 
+def toLL(x, y, z=0.0):
+    rospy.wait_for_service('/cora/robot_localization/toLL')
+    try:
+        sp = rospy.ServiceProxy('/cora/robot_localization/toLL', ToLL)
+        r = ToLLRequest()
+        r.map_point.x = x
+        r.map_point.y = y
+        r.map_point.z = z
+        return sp(r).ll_point
+    except rospy.ServiceException as e:
+        print("Service call failed: %s"%e)
+
+
 #
 # camp display stuff
 #
@@ -192,6 +207,42 @@ def markPosition(pos, ident):
         plist.points.append(gp)
     vizItem.lines.append(plist)
     display_publisher.publish(vizItem)
+
+def markTargets():
+    if detected_targets is not None and len(detected_targets):
+        vizItem = GeoVizItem()
+        vizItem.id = 'detected_targets'
+        for target in detected_targets:
+            plist = GeoVizPointList()
+            plist.color.r = 0.2
+            plist.color.g = 1.0
+            plist.color.b = 0.4
+            plist.color.a = 1.0
+            for corner in target['corners']:
+                ll = toLL(corner[0],corner[1],corner[2])
+                gp = GeoPoint()
+                gp.latitude = ll.latitude
+                gp.longitude = ll.longitude
+                plist.points.append(gp)
+            vizItem.lines.append(plist)
+            
+            pgroup = GeoVizPointList()
+            pgroup.color.r = 0.2
+            pgroup.color.g = 1.0
+            pgroup.color.b = 0.4
+            pgroup.color.a = 1.0
+            pgroup.size = 3.0
+
+            ll = toLL(target['position'][0],target['position'][1],target['position'][2])
+            gp = GeoPoint()
+            gp.latitude = ll.latitude
+            gp.longitude = ll.longitude
+            pgroup.points.append(gp)
+            vizItem.point_groups.append(pgroup)
+            
+            
+        display_publisher.publish(vizItem)
+                
 
 def publishStatus():
     hb = Heartbeat()
@@ -234,10 +285,10 @@ def publishStatus():
             hb.values.append(KeyValue('min_error_'+str(i),str(wayfinding_min_errors[i])))
     if wayfinding_mean_error is not None:
         hb.values.append(KeyValue('mean_error',str(wayfinding_mean_error)))
-        
 
     status_publisher.publish(hb)
-
+    markTargets()
+    
 status_publisher = rospy.Publisher('/project11/mission_manager/status', Heartbeat, queue_size = 1)
 display_publisher = rospy.Publisher('/project11/display', GeoVizItem, queue_size = 10)
 
@@ -262,37 +313,56 @@ def camera_info_callback(data):
 
 rospy.Subscriber('/cora/sensors/cameras/front_left_camera/camera_info', CameraInfo, camera_info_callback)
 
+detected_targets = None
+
 def darknet_detects_callback(data):
-    if task is not None and task.name == 'perception':
+    global detected_targets
+    
+    detected_targets = []
+    try:
+        transformation = tf_buffer.lookup_transform('map', data.image_header.frame_id, data.image_header.stamp)
+
+        # ground plane eq: z=0
+        # line eq: P=p1+u(p2-p1)
+        # P.z = p1.z+u(p2.z-p1.z) = 0
+        # u = -p1.z/(p2.z-p1.z)
+
+        camera_origin = PoseStamped()
+        camera_origin.pose.orientation.w = 1.0
+        camera_in_map_frame = tf2_geometry_msgs.do_transform_pose(camera_origin, transformation)
+
+        p1 = camera_in_map_frame.pose.position
+
         for bb in data.bounding_boxes:
-            print '{} prob: {:.2f}'.format(bb.Class, bb.probability)
-            mid_bottom = (bb.xmin+(bb.xmax-bb.xmin)/2 ,bb.ymax)
-            print 'mid_bottom:',mid_bottom
+            target = {'class':bb.Class, 'probability':bb.probability, 'corners':[], 'timestamp':data.image_header.stamp}
             if left_camera_model is not None:
-                mid_bottom_rectified = left_camera_model.rectifyPoint(mid_bottom)
-                print 'mid_bottom_rectified:',mid_bottom_rectified
-                mid_bottom_ray = left_camera_model.projectPixelTo3dRay(mid_bottom_rectified)
-                print 'mid_bottom_ray', mid_bottom_ray
-                
-                try:
-                    transformation = tf_buffer.lookup_transform(data.image_header.frame_id, 'map', data.image_header.stamp)
+                for corner in ((bb.xmax,bb.ymax),(bb.xmax,bb.ymin),(bb.xmin,bb.ymin),(bb.xmin,bb.ymax), (bb.xmin+(bb.xmax-bb.xmin)/2.0,bb.ymax)): #quick hack, last is bottom middle used as position
+                    corner_rectified = left_camera_model.rectifyPoint(corner)
+                    corner_ray = left_camera_model.projectPixelTo3dRay(corner_rectified)
                     
-                    camera_origin = PoseStamped()
-                    camera_origin.pose.orientation.w = 1.0
-                    camera_in_map_frame = tf2_geometry_msgs.do_transform_pose(camera_origin, transformation)
-                    print 'camera_in_map_frame:', camera_in_map_frame.pose.position
-                    
+                    rospy.logdebug("pixel ray: {}".format(str(corner_ray)))
+                        
                     pixel_in_camera_frame = PoseStamped()
-                    pixel_in_camera_frame.pose.position.x = mid_bottom_ray[0]
-                    pixel_in_camera_frame.pose.position.y = mid_bottom_ray[1]
-                    pixel_in_camera_frame.pose.position.z = mid_bottom_ray[2]
+                    pixel_in_camera_frame.pose.position.x = corner_ray[0]
+                    pixel_in_camera_frame.pose.position.y = corner_ray[1]
+                    pixel_in_camera_frame.pose.position.z = corner_ray[2]
                     pixel_in_camera_frame.pose.orientation.w = 1.0
                     pixel_in_map_frame = tf2_geometry_msgs.do_transform_pose(pixel_in_camera_frame, transformation)
+                    p2 = pixel_in_map_frame.pose.position
                     
-                    print 'pixel_in_map_frame', pixel_in_map_frame.pose.position
+                    rospy.logdebug("p1: {},{},{} p2: {},{},{}".format(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z))
                     
-                except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-                    print 'transformation exception'
+                    u = -p1.z/(p2.z-p1.z)
+                    P = (p1.x+u*(p2.x-p1.x),p1.y+u*(p2.y-p1.y),0.0)
+                    
+                    if len(target['corners']) < 4:
+                        target['corners'].append(P)
+                    else:
+                        target['position'] = P
+            detected_targets.append(target)
+                        
+    except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+        print 'transformation exception'
                 
     
 rospy.Subscriber('/darknet_ros/bounding_boxes', BoundingBoxes, darknet_detects_callback)
@@ -361,7 +431,22 @@ def wayfinding_mean_error_callback(data):
 #
 
 perception_landmark_publisher = rospy.Publisher('/vorc/perception/landmark', GeoPoseStamped, queue_size=10)
+perception_last_sent_timestamp = rospy.Time()
 
+def perception_send_detects():
+    global perception_last_sent_timestamp
+    if detected_targets is not None:
+        for target in detected_targets:
+            if target['timestamp'] > perception_last_sent_timestamp:
+                landmark = GeoPoseStamped()
+                landmark.header.frame_id = target['class']
+                landmark.header.stamp = target['timestamp']
+                ll = toLL(target['position'][0],target['position'][1],target['position'][2])
+                landmark.pose.position.latitude = ll.latitude
+                landmark.pose.position.longitude = ll.longitude
+                perception_landmark_publisher.publish(landmark)
+        if len(detected_targets):
+            perception_last_sent_timestamp = detected_targets[0]['timestamp']
 
 #
 # Task 4 - Black box search (gymkhana)
@@ -370,6 +455,6 @@ perception_landmark_publisher = rospy.Publisher('/vorc/perception/landmark', Geo
 
 
 
-
+rospy.Timer(rospy.Duration(.2), timer_callback)
         
 rospy.spin()

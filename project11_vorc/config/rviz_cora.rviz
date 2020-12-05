@@ -7,7 +7,9 @@ Panels:
         - /Global Options1
         - /Status1
         - /Grid1
+        - /RobotModel1
         - /TF1
+        - /TF1/Frames1
         - /TF1/Tree1
       Splitter Ratio: 0.6350210905075073
     Tree Height: 261
@@ -106,7 +108,7 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
-    - Alpha: 1
+    - Alpha: 0.75
       Class: rviz/RobotModel
       Collision Enabled: false
       Enabled: true
@@ -223,19 +225,19 @@ Visualization Manager:
       Frames:
         All Enabled: false
         cora/base_link:
-          Value: false
+          Value: true
         cora/dummy_link:
           Value: false
         cora/front_left_camera_link:
           Value: false
         cora/front_left_camera_link_optical:
-          Value: false
+          Value: true
         cora/front_left_camera_post_arm_link:
           Value: false
         cora/front_left_camera_post_link:
           Value: false
         cora/front_lidar_link:
-          Value: true
+          Value: false
         cora/front_lidar_post_arm_link:
           Value: false
         cora/front_lidar_post_link:
@@ -257,7 +259,7 @@ Visualization Manager:
         cora/left_propeller_link:
           Value: false
         cora/odom:
-          Value: true
+          Value: false
         cora/pinger:
           Value: false
         cora/right_engine_link:
@@ -267,7 +269,7 @@ Visualization Manager:
         map:
           Value: false
         utm:
-          Value: true
+          Value: false
       Marker Scale: 3
       Name: TF
       Show Arrows: true
@@ -313,12 +315,12 @@ Visualization Manager:
       Class: rviz/Map
       Color Scheme: map
       Draw Behind: false
-      Enabled: true
+      Enabled: false
       Name: Map (octomap)
       Topic: /projected_map
       Unreliable: false
       Use Timestamp: false
-      Value: true
+      Value: false
     - Class: rviz/MarkerArray
       Enabled: false
       Marker Topic: /occupied_cells_vis_array
@@ -331,12 +333,12 @@ Visualization Manager:
       Class: rviz/Map
       Color Scheme: map
       Draw Behind: false
-      Enabled: true
+      Enabled: false
       Name: Map (global)
       Topic: /move_base/global_costmap/costmap
       Unreliable: false
       Use Timestamp: false
-      Value: true
+      Value: false
     - Alpha: 0.699999988079071
       Class: rviz/Map
       Color Scheme: map
@@ -534,25 +536,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 69.18565368652344
+      Distance: 19.444162368774414
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 7.3383636474609375
-        Y: -3.693878173828125
-        Z: -0.40228271484375
+        X: 4.255910396575928
+        Y: -6.614165306091309
+        Z: 0.408817321062088
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.5736892819404602
+      Pitch: 0.20368921756744385
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 2.259720802307129
+      Yaw: 2.3547203540802
     Saved: ~
 Window Geometry:
   Displays:
@@ -574,5 +576,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 2123
-  X: 1525
-  Y: 605
+  X: 1523
+  Y: 537
