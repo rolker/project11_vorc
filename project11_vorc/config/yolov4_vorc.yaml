@@ -1,0 +1,16 @@
+yolo_model:
+
+  config_file:
+    name: yolov4-obj-vorc.cfg
+  weight_file:
+    name: yolov4-obj_final.weights
+  threshold:
+    value: 0.3
+  detection_classes:
+    names:
+      - green_totem
+      - buoy_red
+
+image_view:
+  enable_opencv: false
+  enable_console_output: false

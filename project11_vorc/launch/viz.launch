@@ -4,4 +4,5 @@
   <arg name="rviz_config" default="$(find project11_vorc)/config/rviz_cora.rviz" />
   <node pkg="rviz" type="rviz" name="cora_rviz" args="-d $(arg rviz_config)" />
   
+  <node pkg="rqt_gui" type="rqt_gui" name="rqt"/>
 </launch>
