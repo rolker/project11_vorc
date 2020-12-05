@@ -8,3 +8,4 @@ bool ok # flag indicating that hover ended for non-error reasons (i.e. user requ
 float32 range
 float32 yawerror
 float32 speed
+float32 rangerate

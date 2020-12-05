@@ -71,8 +71,14 @@ class CoraHelm:
 
         if 'timestamp' in self.dd_command:
             if (now - self.dd_command['timestamp']) < rospy.Duration.from_sec(0.5):
+                # Normalized commands.
+                #thrust_mag = abs(self.dd_command['left']) + abs(self.dd_command['right'])
+                    
+                #self.thruster_left_pub.publish(self.dd_command['left']/thrust_mag)
+                #self.thruster_right_pub.publish(self.dd_command['right']/thrust_mag)
                 self.thruster_left_pub.publish(self.dd_command['left'])
                 self.thruster_right_pub.publish(self.dd_command['right'])
+                                               
                 return
 
         
