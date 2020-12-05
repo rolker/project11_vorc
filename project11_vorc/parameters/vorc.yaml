@@ -6,14 +6,15 @@ mission_manager/hover_maximum_distance: 50.0
 mission_manager/hover_maximum_speed: 1.0 # m/s
 
 # simple_differential_controller PID values
-/simple_differential_controller/linearPID_Kp: 0.3 
+/simple_differential_controller/linearPID_Kp: 1
 /simple_differential_controller/linearPID_Ki:  0.1
 /simple_differential_controller/linearPID_Kd:  0.0
-/simple_differential_controller/linearPID_windup: 10.0
-/simple_differential_controller/angularPID_Kp: 10.0
-/simple_differential_controller/angularPID_Ki: 0.1
+/simple_differential_controller/linearPID_windup: 2
+/simple_differential_controller/angularPID_Kp: 10
+/simple_differential_controller/angularPID_Ki: 1
 /simple_differential_controller/angularPID_Kd: 0.0
-/simple_differential_controller/angularPID_windup: 10.0
+/simple_differential_controller/angularPID_windup: 2
+/simple_differential_controller/enableAngularPID: 1
  
 
 

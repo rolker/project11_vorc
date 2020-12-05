@@ -32,8 +32,10 @@ class PID:
                 
         self.last_timestamp = timestamp
         
-        if dt is not None:
+        if dt is not None and dt < 5.:
             self.integral += error * dt
+        else:
+            self.integral = 0.0
         if self.windup_limit is not None:
             self.integral = min(self.integral,self.windup_limit)
             self.integral = max(self.integral,-self.windup_limit)

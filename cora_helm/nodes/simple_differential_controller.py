@@ -31,21 +31,23 @@ angularPID_Kp = rospy.get_param('/simple_differential_controller/angularPID_Kp')
 angularPID_Ki = rospy.get_param('/simple_differential_controller/angularPID_Ki')
 angularPID_Kd = rospy.get_param('/simple_differential_controller/angularPID_Kd')
 angularPID_windup = rospy.get_param('/simple_differential_controller/angularPID_windup')
+enableAngularPIDControl = rospy.get_param('/simple_differential_controller/enableAngularPID')
 
-rospy.loginfo("Setting Initial Linear Kp:%0.2f" % linearPID_Kp)
-rospy.loginfo("Setting Initial Linear Ki: %0.2f" % linearPID_Ki)
-rospy.loginfo("Setting Initial Linear Kd: %0.2f" % linearPID_Kd)
-rospy.loginfo("Setting Initial Linear windup: %0.2f" % linearPID_windup)
+print("Setting Initial Linear Kp:%0.2f" % linearPID_Kp)
+print("Setting Initial Linear Ki: %0.2f" % linearPID_Ki)
+print("Setting Initial Linear Kd: %0.2f" % linearPID_Kd)
+print("Setting Initial Linear windup: %0.2f" % linearPID_windup)
 
-rospy.loginfo("Setting Initial Angular Kp:%0.2f" % angularPID_Kp)
-rospy.loginfo("Setting Initial Angular Ki: %0.2f" % angularPID_Ki)
-rospy.loginfo("Setting Initial Angular Kd: %0.2f" % angularPID_Kd)
-rospy.loginfo("Setting Initial Angular windup: %0.2f" % angularPID_windup)
+print("Setting Initial Angular Kp:%0.2f" % angularPID_Kp)
+print("Setting Initial Angular Ki: %0.2f" % angularPID_Ki)
+print("Setting Initial Angular Kd: %0.2f" % angularPID_Kd)
+print("Setting Initial Angular windup: %0.2f" % angularPID_windup)
 
 #linear_pid = pid_controller.PID( Kp=0.3, Ki=.05, Kd=0.0, windup_limit=10 )
 #angular_pid = pid_controller.PID( Kp=100, Ki=10 ,Kd=0.0, windup_limit=50 )
-linear_pid = pid_controller.PID( Kp=linearPID_Kp, Ki=linearPID_Ki, Kd=linearPID_Kd, windup_limit=linearPID_windup )
+linearL_pid = pid_controller.PID( Kp=linearPID_Kp, Ki=linearPID_Ki, Kd=linearPID_Kd, windup_limit=linearPID_windup )
 angular_pid = pid_controller.PID( Kp=angularPID_Kp, Ki=angularPID_Ki ,Kd=angularPID_Kd, windup_limit=angularPID_windup )
+linearR_pid = pid_controller.PID( Kp=linearPID_Kp, Ki=linearPID_Ki, Kd=linearPID_Kd, windup_limit=linearPID_windup )
 
 def cmd_callback(data):
     global last_command
@@ -56,6 +58,15 @@ def cmd_callback(data):
     
 def odom_callback(data):
     global last_odom_time
+    global linearPID_Kp
+    global linearPID_Ki
+    global linearPID_Kd
+    global linearPID_windup
+    global angularPID_Kp
+    global angularPID_Ki
+    global angularPID_Kd
+    global angularPID_windup
+    global enableAngularPIDControl
 
     # Don't check for new PID parameters more frequently that 1 Hz.
     if last_odom_time is None:
@@ -69,6 +80,7 @@ def odom_callback(data):
         angularPID_Ki = rospy.get_param('/simple_differential_controller/angularPID_Ki')
         angularPID_Kd = rospy.get_param('/simple_differential_controller/angularPID_Kd')
         angularPID_windup = rospy.get_param('/simple_differential_controller/angularPID_windup')
+        enableAngularPIDControl = rospy.get_param('/simple_differential_controller/enableAngularPID')
 
         '''
         rospy.loginfo("Setting Initial Linear Kp:%0.2f" % linearPID_Kp)
@@ -81,28 +93,65 @@ def odom_callback(data):
         rospy.loginfo("Setting Initial Angular Kd: %0.2f" % angularPID_Kd)
         rospy.loginfo("Setting Initial Angular windup: %0.2f" % angularPID_windup)
         '''
+        
+        linearR_pid.setPIDparameters(linearPID_Kp,
+                                    linearPID_Ki,
+                                    linearPID_Kd,
+                                    linearPID_windup)
 
-        angular_pid.setPIDparameters(linearPID_Kp,linearPID_Ki,linearPID_Kd,linearPID_windup)
-        linear_pid.setPIDparameters(angularPID_Kp,angularPID_Ki,angularPID_Kd,angularPID_windup)
+        linearL_pid.setPIDparameters(linearPID_Kp,
+                                    linearPID_Ki,
+                                    linearPID_Kd,
+                                    linearPID_windup)
+        angular_pid.setPIDparameters(angularPID_Kp,
+                                     angularPID_Ki,
+                                     angularPID_Kd,
+                                     angularPID_windup)
         last_odom_time = datetime.datetime.now()
 
     if (last_command is not None and
             last_command_time is not None and
             datetime.datetime.now()-last_command_time < datetime.timedelta(seconds=0.5)):
 
-        linear_pid.set_point = last_command.linear.x
         angular_pid.set_point = last_command.angular.z
-        
-        linear = linear_pid.update(data.twist.twist.linear.x)
-        angular = angular_pid.update(data.twist.twist.angular.z) # positive is conter-clockwase
 
-        right = linear + angular
-        left = linear - angular
+        angular = angular_pid.update(data.twist.twist.angular.z) # positive is conter-clockwase
+        
+        # In this cascaded control design, heading rate (angular) control is 
+        # added to the desired linear velocity control setup, adding/subtracting
+        # right and left respectively to crreate the turn. These angular values
+        # could be weighted (or maybe that's taken care of in the PID constants.)
+        # In some circumstances, it is useful to disable heading control. Particuarly 
+        # when you want to stop fast. 
+        if enableAngularPIDControl:
+            linearR_pid.set_point = last_command.linear.x + angular
+            linearL_pid.set_point = last_command.linear.x - angular
+        else:
+            linearR_pid.set_point = last_command.linear.x
+            linearL_pid.set_point = last_command.linear.x
+            
+        linearL = linearL_pid.update(data.twist.twist.linear.x)
+        linearR = linearR_pid.update(data.twist.twist.linear.x)
+
+           
+        '''
+        total_control = abs(linear) + abs(angular)
+        if total_control == 0:
+            right = 0
+            left = 0
+        else:
+            right = ( linear + (linear+angular) ) / (2*total_control)
+            left = ( linear + (linear-angular) ) / (2*total_control)
+            right = (linear + linear * angular/total_control) / total_control
+            left = (linear - linear * angular / total_control) / total_control
+        '''
+        #right = (linear + angular) / max_control
+        #left = (linear - angular) / max_control
         
         dd = DifferentialDrive()
         dd.header.stamp = data.header.stamp
-        dd.left_thrust = left
-        dd.right_thrust = right
+        dd.left_thrust = linearL
+        dd.right_thrust = linearR
         differential_pub.publish(dd)
     
     
