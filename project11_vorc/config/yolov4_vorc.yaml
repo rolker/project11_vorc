@@ -13,3 +13,4 @@ yolo_model:
 
 image_view:
   enable_opencv: false
+  enable_console_output: false

@@ -7,6 +7,8 @@
 
 import rospy
 import actionlib
+import tf2_ros
+import tf2_geometry_msgs
 
 from vrx_gazebo.msg import Task
 from std_msgs.msg import Float64, Float64MultiArray, String
@@ -16,23 +18,26 @@ from marine_msgs.msg import Heartbeat
 from marine_msgs.msg import KeyValue
 from geographic_visualization_msgs.msg import GeoVizItem, GeoVizPointList
 from nav_msgs.msg import Odometry
+from darknet_ros_msgs.msg import BoundingBoxes
+from sensor_msgs.msg import CameraInfo
 
 from robot_localization.srv import *
 
 import move_base_msgs.msg
 import dp_hover.msg
 
+from image_geometry.cameramodels import PinholeCameraModel
 
 rospy.init_node('vorc_task_manager')
-
-task = None
-status = 'idle'
-
 
 
 #
 # Common to all tasks
 #
+
+task = None
+status = 'idle'
+
 def task_callback(data):
     global task
     task = data
@@ -236,6 +241,61 @@ def publishStatus():
 status_publisher = rospy.Publisher('/project11/mission_manager/status', Heartbeat, queue_size = 1)
 display_publisher = rospy.Publisher('/project11/display', GeoVizItem, queue_size = 10)
 
+#
+# tf2 stuff
+#
+
+tf_buffer = tf2_ros.Buffer()
+tf_listener = tf2_ros.TransformListener(tf_buffer)
+
+#
+# perception stuff
+#
+
+left_camera_model = None
+
+def camera_info_callback(data):
+    global left_camera_model
+    
+    left_camera_model = PinholeCameraModel()
+    left_camera_model.fromCameraInfo(data)
+
+rospy.Subscriber('/cora/sensors/cameras/front_left_camera/camera_info', CameraInfo, camera_info_callback)
+
+def darknet_detects_callback(data):
+    if task is not None and task.name == 'perception':
+        for bb in data.bounding_boxes:
+            print '{} prob: {:.2f}'.format(bb.Class, bb.probability)
+            mid_bottom = (bb.xmin+(bb.xmax-bb.xmin)/2 ,bb.ymax)
+            print 'mid_bottom:',mid_bottom
+            if left_camera_model is not None:
+                mid_bottom_rectified = left_camera_model.rectifyPoint(mid_bottom)
+                print 'mid_bottom_rectified:',mid_bottom_rectified
+                mid_bottom_ray = left_camera_model.projectPixelTo3dRay(mid_bottom_rectified)
+                print 'mid_bottom_ray', mid_bottom_ray
+                
+                try:
+                    transformation = tf_buffer.lookup_transform(data.image_header.frame_id, 'map', data.image_header.stamp)
+                    
+                    camera_origin = PoseStamped()
+                    camera_origin.pose.orientation.w = 1.0
+                    camera_in_map_frame = tf2_geometry_msgs.do_transform_pose(camera_origin, transformation)
+                    print 'camera_in_map_frame:', camera_in_map_frame.pose.position
+                    
+                    pixel_in_camera_frame = PoseStamped()
+                    pixel_in_camera_frame.pose.position.x = mid_bottom_ray[0]
+                    pixel_in_camera_frame.pose.position.y = mid_bottom_ray[1]
+                    pixel_in_camera_frame.pose.position.z = mid_bottom_ray[2]
+                    pixel_in_camera_frame.pose.orientation.w = 1.0
+                    pixel_in_map_frame = tf2_geometry_msgs.do_transform_pose(pixel_in_camera_frame, transformation)
+                    
+                    print 'pixel_in_map_frame', pixel_in_map_frame.pose.position
+                    
+                except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+                    print 'transformation exception'
+                
+    
+rospy.Subscriber('/darknet_ros/bounding_boxes', BoundingBoxes, darknet_detects_callback)
 
 #
 # Task 1 - Station Keeping
@@ -299,6 +359,9 @@ def wayfinding_mean_error_callback(data):
 #
 # Task 3 - Landmark Localization and Characterization (perception)
 #
+
+perception_landmark_publisher = rospy.Publisher('/vorc/perception/landmark', GeoPoseStamped, queue_size=10)
+
 
 #
 # Task 4 - Black box search (gymkhana)
