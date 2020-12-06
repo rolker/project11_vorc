@@ -6,7 +6,6 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
-        - /Grid1
         - /TF1/Frames1
         - /TF1/Tree1
       Splitter Ratio: 0.6350210905075073
@@ -313,12 +312,12 @@ Visualization Manager:
       Class: rviz/Map
       Color Scheme: map
       Draw Behind: false
-      Enabled: false
+      Enabled: true
       Name: Map (octomap)
       Topic: /projected_map
       Unreliable: false
       Use Timestamp: false
-      Value: false
+      Value: true
     - Class: rviz/MarkerArray
       Enabled: false
       Marker Topic: /occupied_cells_vis_array
@@ -534,25 +533,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 78.69563293457031
+      Distance: 196.09425354003906
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 102.80230712890625
-        Y: 68.80621337890625
-        Z: 37.211063385009766
+        X: 83.7880859375
+        Y: 74.36697387695312
+        Z: 26.447980880737305
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.4697964191436768
+      Pitch: 1.5547963380813599
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 3.1497182846069336
+      Yaw: 3.134718418121338
     Saved: ~
 Window Geometry:
   Displays:
@@ -574,5 +573,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 2123
-  X: 1522
-  Y: 503
+  X: 1521
+  Y: 469
