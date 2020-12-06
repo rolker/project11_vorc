@@ -24,6 +24,8 @@ from darknet_ros_msgs.msg import BoundingBoxes
 from sensor_msgs.msg import CameraInfo
 from usv_msgs.msg import RangeBearing
 
+from task_manager_utilities import rotate
+
 from robot_localization.srv import *
 
 import move_base_msgs.msg
@@ -559,6 +561,14 @@ def pinger_callback(data):
 
         pinger_map = tf2_geometry_msgs.do_transform_pose(pinger, transformation)
         ping['position'] = pinger_map.pose.position
+        
+        # Rotation with uncertainty example:
+        xyz, Cxyz = rangeBearingElevationtoXYZ(range=data.range,
+                                               bearing=-data.bearing, 
+                                               elevation=data.elevation,
+                                               sigmaRange = 3.0,
+                                               sigmaBearing = 0.03,
+                                               sigmaElevation = 0.03)
 
     except Exception as e: #(tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
         print 'transformation exception:',e
