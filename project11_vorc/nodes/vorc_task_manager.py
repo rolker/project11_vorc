@@ -15,7 +15,7 @@ import tf
 from vrx_gazebo.msg import Task
 from std_msgs.msg import Float64, Float64MultiArray, String
 from geographic_msgs.msg import GeoPoseStamped, GeoPoint, GeoPath
-from geometry_msgs.msg import PoseStamped, Twist, TransformStamped, Vector3Stamped
+from geometry_msgs.msg import PoseStamped, Twist, TransformStamped, Vector3Stamped, Pose
 from marine_msgs.msg import Heartbeat
 from marine_msgs.msg import KeyValue
 from geographic_visualization_msgs.msg import GeoVizItem, GeoVizPointList
@@ -96,27 +96,7 @@ def timer_callback(event):
             goal = wayfinding_waypoints[wayfinding_current_waypoint]
             
         if goal is not None:
-            
-            hg = dp_hover.msg.dp_hoverGoal()
-            hg.target.header.frame_id = 'map'
-            hg.target.header.stamp = rospy.get_rostime()
-            hg.target.pose.position = goal['position']
-            hg.target.pose.orientation = goal['orientation']
-            
-            dp_hover_action_client.wait_for_server()
-            dp_hover_action_client.send_goal(hg,dp_hover_done_callback, None, dp_hover_feedback_callback)
-            
-            status = 'dp_hover'
-        
-            #mbg = move_base_msgs.msg.MoveBaseGoal()
-            #mbg.target_pose.header.frame_id = 'map'
-            #mbg.target_pose.header.stamp = rospy.get_rostime()
-            #mbg.target_pose.pose.position = goal_map
-            #mbg.target_pose.pose.orientation = goal.pose.orientation
-
-            #move_base_action_client.wait_for_server()
-            #move_base_action_client.send_goal(mbg,move_base_done_callback, None, move_base_feedback_callback)
-            #status = 'move_base'
+            do_hover(goal)
             
     if status == 'dp_hover':
         if task is not None and task.name == 'wayfinding':
@@ -129,6 +109,30 @@ def timer_callback(event):
     if task is not None and task.name == 'gymkhana':
         do_gymkhana_stuff()
 
+def do_hover(goal, which_one='move_base'):
+    global status
+    
+    if which_one == 'dp_hover':
+        hg = dp_hover.msg.dp_hoverGoal()
+        hg.target.header.frame_id = 'map'
+        hg.target.header.stamp = rospy.get_rostime()
+        hg.target.pose = goal
+        
+        dp_hover_action_client.wait_for_server()
+        dp_hover_action_client.send_goal(hg,dp_hover_done_callback, None, dp_hover_feedback_callback)
+        
+        status = 'dp_hover'
+
+    if which_one == 'move_base':
+        mbg = move_base_msgs.msg.MoveBaseGoal()
+        mbg.target_pose.header.frame_id = 'map'
+        mbg.target_pose.header.stamp = rospy.get_rostime()
+        mbg.target_pose.pose = goal
+
+        move_base_action_client.wait_for_server()
+        move_base_action_client.send_goal(mbg,move_base_done_callback, None, move_base_feedback_callback)
+        status = 'move_base'
+    
 
 #
 # move_base stuff
@@ -498,31 +502,13 @@ gymkhana_state = None
 
 def do_gymkhana_stuff():
     global status
-    return
     
     if status == 'idle' and pinger_location is not None and len(pinger_location['history']):
         pinger = pinger_location['history'][-1]
-        
-        #mbg = move_base_msgs.msg.MoveBaseGoal()
-        #mbg.target_pose.header.frame_id = 'map'
-        #mbg.target_pose.header.stamp = rospy.get_rostime()
-        #mbg.target_pose.pose.position = pinger['position']
-        #mbg.target_pose.pose.orientation.w = 1.0
-
-        #move_base_action_client.wait_for_server()
-        #move_base_action_client.send_goal(mbg,move_base_done_callback, None, move_base_feedback_callback)
-        #status = 'move_base'
-
-        hg = dp_hover.msg.dp_hoverGoal()
-        hg.target.header.frame_id = 'map'
-        hg.target.header.stamp = rospy.get_rostime()
-        hg.target.pose.position = pinger['position']
-        hg.target.pose.orientation.w = 1.0
-        
-        dp_hover_action_client.wait_for_server()
-        dp_hover_action_client.send_goal(hg,dp_hover_done_callback, None, dp_hover_feedback_callback)
-        
-        status = 'dp_hover'
+        goal = Pose()
+        goal.position = pinger['position']
+        goal.orientation.w = 1.0
+        do_hover(goal,which_one='move_base')
         
 
 pinger_location = None
@@ -563,8 +549,6 @@ def pinger_callback(data):
     except Exception as e: #(tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
         print 'transformation exception:',e
 
-
-    
     pinger_location['history'].append(ping)
     
 
