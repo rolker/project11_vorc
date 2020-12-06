@@ -126,10 +126,10 @@ public:
                 {
                     cmd.linear.x = -0.3;
                     cmd.angular.z = std::max(-m_maximum_angular_speed,std::min(m_maximum_angular_speed, yaw_to_dp_point_difference));
-                    ROS_INFO("DP Hover Start - Twist to Point");
+                    ROS_DEBUG("DP Hover Start - Twist to Point");
 
                 }else{
-                    ROS_INFO("Go To Point at Speed");
+                    ROS_DEBUG("Go To Point at Speed");
 
                 cmd.linear.x = m_maximum_speed;
                 cmd.angular.z = std::max(-m_maximum_angular_speed,std::min(m_maximum_angular_speed, yaw_to_dp_point_difference));
@@ -141,7 +141,7 @@ public:
             // hover point, proceeding slowly. 
             else if (range > m_minimum_distance)
             {
-                ROS_INFO("Middle Circle Slowing...");
+                ROS_DEBUG("Middle Circle Slowing...");
 
                 m_navTimer0 = 0.0;
                 float p = (range - m_minimum_distance)/(m_maximum_distance - m_minimum_distance) + 0.2;
@@ -174,7 +174,7 @@ public:
                     yawrate = 0.0;
                 }
                 
-                //ROS_INFO("%0.2f",delaytime);
+                //ROS_DEBUG("%0.2f",delaytime);
                 
                 
                 // The idea here is to momentarily set the speed to 0 when we get inside the inner most circle. 
@@ -187,7 +187,7 @@ public:
                 
                 
                 if (m_stopAndTwistConditionNotMet){
-                    ROS_INFO("Inner Circle Stop");
+                    ROS_DEBUG("Inner Circle Stop");
                     cmd.linear.x = 0.01;
                     m_node_handle.setParam("/simple_differential_controller/enableAngularPID",0);
                     //cmd.angular.z = 0.0;
@@ -200,7 +200,7 @@ public:
                 }
                 if (m_stopAndTwistConditionNotMet == FALSE & m_twistToPointConditionNotMet)
                 {
-                    ROS_INFO("Inner Circle Twist"); 
+                    ROS_DEBUG("Inner Circle Twist"); 
 
                     cmd.linear.x = 0.0; 
                     cmd.angular.z = std::max(-m_maximum_angular_speed,std::min(m_maximum_angular_speed, yaw_to_dp_point_difference));
@@ -211,7 +211,7 @@ public:
                 }
                 if (m_stopAndTwistConditionNotMet == FALSE & m_twistToPointConditionNotMet == FALSE) 
                 {
-                    ROS_INFO("Inner Circle Proceed to Point");
+                    ROS_DEBUG("Inner Circle Proceed to Point");
 
                     cmd.linear.x = 0.3;
                     cmd.angular.z = std::max(-m_maximum_angular_speed,std::min(m_maximum_angular_speed, yaw_to_dp_point_difference));
@@ -244,7 +244,7 @@ public:
 
                 if(m_stopAndTwistConditionNotMet) {
                     cmd.linear.x = -0.3;
-                    ROS_INFO("At Point. Remove Weigh.");
+                    ROS_DEBUG("At Point. Remove Weigh.");
                     m_node_handle.setParam("/simple_differential_controller/enableAngularPID",0);
 
                     //cmd.angular.z = std::max(-m_maximum_angular_speed,std::min(m_maximum_angular_speed,float(0)));
@@ -255,7 +255,7 @@ public:
 
                     }  
                 }else{
-                    ROS_INFO("Twist to Desired Heading");
+                    ROS_DEBUG("Twist to Desired Heading");
                     if (abs(m_lastYawerror) != yawerror) { cmd.linear.x=-0.3;}
                     cmd.linear.x = 0.0;
                 }
@@ -280,7 +280,7 @@ public:
                 m_desiredTwistCmd_pub.publish(cmd);
                 lastOdomTime = now;
                 ROS_DEBUG("Sending Twist on /cmd_vel!");
-                //ROS_INFO("%0.3f, %0.3f", dRdt, yaw_to_dp_point);
+                //ROS_DEBUG("%0.3f, %0.3f", dRdt, yaw_to_dp_point);
 
 
                 if (range < m_minimum_distance) {

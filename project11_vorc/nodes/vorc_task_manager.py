@@ -500,15 +500,26 @@ def do_gymkhana_stuff():
     if status == 'idle' and pinger_location is not None and len(pinger_location['history']):
         pinger = pinger_location['history'][-1]
         
-        mbg = move_base_msgs.msg.MoveBaseGoal()
-        mbg.target_pose.header.frame_id = 'map'
-        mbg.target_pose.header.stamp = rospy.get_rostime()
-        mbg.target_pose.pose.position = pinger['position']
-        mbg.target_pose.pose.orientation.w = 1.0
+        #mbg = move_base_msgs.msg.MoveBaseGoal()
+        #mbg.target_pose.header.frame_id = 'map'
+        #mbg.target_pose.header.stamp = rospy.get_rostime()
+        #mbg.target_pose.pose.position = pinger['position']
+        #mbg.target_pose.pose.orientation.w = 1.0
 
-        move_base_action_client.wait_for_server()
-        move_base_action_client.send_goal(mbg,move_base_done_callback, None, move_base_feedback_callback)
-        status = 'move_base'
+        #move_base_action_client.wait_for_server()
+        #move_base_action_client.send_goal(mbg,move_base_done_callback, None, move_base_feedback_callback)
+        #status = 'move_base'
+
+        hg = dp_hover.msg.dp_hoverGoal()
+        hg.target.header.frame_id = 'map'
+        hg.target.header.stamp = rospy.get_rostime()
+        hg.target.pose.position = pinger['position']
+        hg.target.pose.orientation.w = 1.0
+        
+        dp_hover_action_client.wait_for_server()
+        dp_hover_action_client.send_goal(hg,dp_hover_done_callback, None, dp_hover_feedback_callback)
+        
+        status = 'dp_hover'
         
 
 pinger_location = None
