@@ -9,17 +9,20 @@ import rospy
 import actionlib
 import tf2_ros
 import tf2_geometry_msgs
+import tf_conversions
+import tf
 
 from vrx_gazebo.msg import Task
 from std_msgs.msg import Float64, Float64MultiArray, String
 from geographic_msgs.msg import GeoPoseStamped, GeoPoint, GeoPath
-from geometry_msgs.msg import PoseStamped, Twist
+from geometry_msgs.msg import PoseStamped, Twist, TransformStamped, Vector3Stamped
 from marine_msgs.msg import Heartbeat
 from marine_msgs.msg import KeyValue
 from geographic_visualization_msgs.msg import GeoVizItem, GeoVizPointList
 from nav_msgs.msg import Odometry
 from darknet_ros_msgs.msg import BoundingBoxes
 from sensor_msgs.msg import CameraInfo
+from usv_msgs.msg import RangeBearing
 
 from robot_localization.srv import *
 
@@ -28,8 +31,9 @@ import dp_hover.msg
 
 from image_geometry.cameramodels import PinholeCameraModel
 
-rospy.init_node('vorc_task_manager')
 
+
+rospy.init_node('vorc_task_manager')
 
 #
 # Common to all tasks
@@ -121,6 +125,9 @@ def timer_callback(event):
 
     if task is not None and task.name == 'perception':
         perception_send_detects()
+
+    if task is not None and task.name == 'gymkhana':
+        do_gymkhana_stuff()
 
 
 #
@@ -239,10 +246,43 @@ def markTargets():
             gp.longitude = ll.longitude
             pgroup.points.append(gp)
             vizItem.point_groups.append(pgroup)
-            
-            
         display_publisher.publish(vizItem)
-                
+
+def markPinger():
+    if pinger_location is not None and len(pinger_location['history']):
+        pinger = pinger_location['history'][-1]
+        vizItem = GeoVizItem()
+        vizItem.id = 'pinger'
+        
+        pgroup = GeoVizPointList()
+        pgroup.color.r = 0.8
+        pgroup.color.g = 0.7
+        pgroup.color.b = 0.6
+        pgroup.color.a = 1.0
+        pgroup.size = 3.0
+
+        ll = toLL(pinger['position'].x,pinger['position'].y,pinger['position'].z)
+        gp = GeoPoint()
+        gp.latitude = ll.latitude
+        gp.longitude = ll.longitude
+        pgroup.points.append(gp)
+        vizItem.point_groups.append(pgroup)
+        
+        plist = GeoVizPointList()
+        plist.color.r = 0.6
+        plist.color.g = 0.7
+        plist.color.b = 0.8
+        plist.color.a = 1.0
+        plist.size = 3.0
+        for deltas in ( (-0.0002,0), (0,+0.0003), (+0.0002,0), (0,-0.0003), (-0.0002,0)):
+            gp = GeoPoint()
+            gp.latitude = ll.latitude+deltas[0]
+            gp.longitude = ll.longitude+deltas[1]
+            plist.points.append(gp)
+        vizItem.lines.append(plist)
+        
+        display_publisher.publish(vizItem)
+        
 
 def publishStatus():
     hb = Heartbeat()
@@ -288,6 +328,7 @@ def publishStatus():
 
     status_publisher.publish(hb)
     markTargets()
+    markPinger()
     
 status_publisher = rospy.Publisher('/project11/mission_manager/status', Heartbeat, queue_size = 1)
 display_publisher = rospy.Publisher('/project11/display', GeoVizItem, queue_size = 10)
@@ -452,9 +493,72 @@ def perception_send_detects():
 # Task 4 - Black box search (gymkhana)
 #
 
+gymkhana_state = None
+
+def do_gymkhana_stuff():
+    global status
+    if status == 'idle' and pinger_location is not None and len(pinger_location['history']):
+        pinger = pinger_location['history'][-1]
+        
+        mbg = move_base_msgs.msg.MoveBaseGoal()
+        mbg.target_pose.header.frame_id = 'map'
+        mbg.target_pose.header.stamp = rospy.get_rostime()
+        mbg.target_pose.pose.position = pinger['position']
+        mbg.target_pose.pose.orientation.w = 1.0
+
+        move_base_action_client.wait_for_server()
+        move_base_action_client.send_goal(mbg,move_base_done_callback, None, move_base_feedback_callback)
+        status = 'move_base'
+        
+
+pinger_location = None
+
+def pinger_callback(data):
+    global pinger_location
+    
+    if pinger_location is None:
+        pinger_location = {'history':[]}
+        
+    ping = {'range':data.range, 'bearing':data.bearing, 'elevation':data.elevation}
+    
+    try:
+        transformation = tf_buffer.lookup_transform('map', data.header.frame_id, data.header.stamp, rospy.Duration(1.0))
+
+        v = Vector3Stamped()
+        v.vector.x = data.range
+        
+        t = TransformStamped()
+        q = tf.transformations.quaternion_inverse(tf.transformations.quaternion_from_euler(0, data.elevation, -data.bearing))
+
+        t.transform.rotation.x = q[0]
+        t.transform.rotation.y = q[1]
+        t.transform.rotation.z = q[2]
+        t.transform.rotation.w = q[3]
+
+        vt = tf2_geometry_msgs.do_transform_vector3(v, t)
+    
+        pinger = PoseStamped()
+        pinger.pose.position.x = vt.vector.x
+        pinger.pose.position.y = vt.vector.y
+        pinger.pose.position.z = vt.vector.z
+        pinger.pose.orientation.w = 1.0
+
+        pinger_map = tf2_geometry_msgs.do_transform_pose(pinger, transformation)
+        ping['position'] = pinger_map.pose.position
+
+    except Exception as e: #(tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+        print 'transformation exception:',e
 
 
+    
+    pinger_location['history'].append(ping)
+    
+
+rospy.Subscriber('/cora/sensors/pingers/pinger/range_bearing', RangeBearing, pinger_callback)
+
+#
+# Let 'r rip!
+#
 
 rospy.Timer(rospy.Duration(.2), timer_callback)
-        
 rospy.spin()
