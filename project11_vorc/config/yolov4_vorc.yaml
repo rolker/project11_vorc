@@ -12,4 +12,4 @@ yolo_model:
       - buoy_red
 
 image_view:
-  enable_opencv: false
+  enable_opencv: true
