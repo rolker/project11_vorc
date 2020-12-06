@@ -1,5 +1,5 @@
 <launch>
-    <rosparam command="load" file="$(find project11_vorc)/parameters/vorc.yaml" />
+    <rosparam command="load" file="$(find project11_vorc)/config/vorc.yaml" />
 
     <include file="$(find project11_vorc)/launch/localization.launch"/>
     
