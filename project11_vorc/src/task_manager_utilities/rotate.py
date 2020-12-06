@@ -27,7 +27,7 @@ def rangeBearingElevationtoXYZ(range, bearing, elevation, sigmaRange, sigmaBeari
     y = X[1][0]
     z = X[2][0]
 
-    Cxyz = np.diag([1e-10,1-10,sigmaRange**2])
+    Cxyz = np.diag([0.0,sigmaRange**2,0.0])
 
     r = elevation
     p = 0.0
@@ -42,8 +42,8 @@ def rangeBearingElevationtoXYZ(range, bearing, elevation, sigmaRange, sigmaBeari
     cos_h = np.cos(h)
 
     # Angle covariance.
-    Crph = np.diag([1e-10,
-                    sigmaDeclination**2,
+    Crph = np.diag([sigmaElevation**2,
+                    0.0,
                     sigmaBearing**2])    
 
     # Build the combined covariance

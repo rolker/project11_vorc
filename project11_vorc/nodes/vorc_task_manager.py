@@ -16,6 +16,7 @@ from vrx_gazebo.msg import Task
 from std_msgs.msg import Float64, Float64MultiArray, String
 from geographic_msgs.msg import GeoPoseStamped, GeoPoint, GeoPath
 from geometry_msgs.msg import PoseStamped, Twist, TransformStamped, Vector3Stamped
+from geometry_msgs.msg import PoseWithCovarianceStamped
 from marine_msgs.msg import Heartbeat
 from marine_msgs.msg import KeyValue
 from geographic_visualization_msgs.msg import GeoVizItem, GeoVizPointList
@@ -24,6 +25,10 @@ from darknet_ros_msgs.msg import BoundingBoxes
 from sensor_msgs.msg import CameraInfo
 from usv_msgs.msg import RangeBearing
 
+import numpy as np
+
+from filterpy.kalman import KalmanFilter
+from filterpy.common import Q_discrete_white_noise
 from task_manager_utilities import rotate
 
 from robot_localization.srv import *
@@ -528,9 +533,122 @@ def do_gymkhana_stuff():
         
 
 pinger_location = None
+pingerTracker = None
+pingerMeasurement = None
+pingerPubfiltered = rospy.Publisher('/pinger/map/filtered',PoseWithCovarianceStamped,queue_size=10)
+pingerPub = rospy.Publisher('/pinger/map/raw',PoseWithCovarianceStamped,queue_size=10)
+
+try:
+    sigmaRange = rospy.get_param("/task_manager/pinger/sigmaRange")
+    sigmaBearing = rospy.get_param("/task_manager/pinger/sigmaBearing")
+    sigmaElevation = rospy.get_param("/task_manager/pinger/sigmaElevation")
+    
+except:
+    rospy.logwarn("Unable to retrieve pinger measurement uncertainty from parameter server.")
+    rospy.logwarn("Setting default values (3.0, 0.03, 0.03)")
+    sigmaRange = 3.0
+    sigmaBearing = 0.03
+    sigmaElevation = 0.03
+
+def initPingerTracker(X,R, isStationary = False):
+    ''' Initalize a Kalman Filter to Track the Pinger Measurements'''
+    global pingerTracker
+    global pingerMeasurement
+    pingerMeasurement = None
+    
+    pingerTracker = KalmanFilter(dim_x=6,dim_z=3)
+    
+    dt = 1.0
+
+    if isStationary:
+            # Set up 1st order transition matrix.
+            pingerTracker.F = np.array([[1, dt, 0,  0, 0, 0],
+                      [0,  0, 0,  0, 0, 0],
+                      [0,  0, 1, dt, 0, 0],
+                      [0,  0, 0,  0, 0, 0],
+                      [0, 0, 0, 0, 1, dt],
+                      [0, 0, 0, 0, 0, 0]])
+    else:
+        # Set up 1st order transition matrix.
+        pingerTracker.F = np.array([[1, dt, 0,  0, 0, 0],
+                            [0,  1, 0,  0, 0, 0],
+                            [0,  0, 1, dt, 0, 0],
+                            [0,  0, 0,  1, 0, 0],
+                            [0, 0, 0, 0, 1, dt],
+                            [0, 0, 0, 0, 0, 1]])
+    
+    # Set up measurment matrix (only measuring position)
+    pingerTracker.H = np.array([[1, 0, 0, 0, 0, 0],
+                                [0, 0, 1, 0, 0, 0],
+                                [0, 0, 0, 0, 1, 0]])
+    
+    # Set up process model covariance (assumes update rate is constant)
+    #qvar = ros.get_param("/task_manager/pinger/tracker_variance")
+
+    try:
+        qvar = ros.get_param("/task_manager/pinger/tracker_variance")
+    except:
+        rospy.logwarn("Unable to retrieve pinger tracker variance from parameter server.")
+        rospy.logwarn("Setting default: 0.5")
+        qvar = 0.5
+        
+    q = Q_discrete_white_noise(dim=2,dt=dt,var=qvar)
+    
+    Z = np.zeros((2,2))
+    pingerTracker.Q = np.block([[ q, Z, Z],
+                                [Z, q, Z],
+                                [Z, Z, q]])
+    
+    # Initalize filter with initial measurements. (increase uncertanty initially)
+    pingerTracker.x = np.array([X[0],[0],X[1],[0],X[2],[0]])
+    pingerTracker.R = R * 3
+    
+
+def updatePingerFilterCallback(data):
+    ''' Called from a rospy.Timer at 1 Hz to update the Kalman Filter'''
+    global pingerMeasurement
+    global pingerPub
+    # If the tracker hasn't been initalized, do nothing.
+    if pingerTracker is None:
+        return
+    
+    # Otherwise update the filter an incorprate a measurement if there's a new one.
+    pingerTracker.predict()
+    if pingerMeasurement is not None:
+        # Assign the fields into the Kalman filter.
+        pingerTracker.R = pingerMeasurement[1]
+        pingerTracker.update(pingerMeasurement[0])
+        
+        # Publish the measurement.
+        pos = PoseWithCovarianceStamped()
+        pos.header.stamp = rospy.Time.now()
+        pos.header.frame_id = '/map'
+        pos.pose.pose.position.x = pingerMeasurement[0][0]
+        pos.pose.pose.position.y = pingerMeasurement[0][1]
+        pos.pose.pose.position.z = pingerMeasurement[0][2]
+        cov = np.zeros((6,6))
+        cov[::2,::2] = pingerMeasurement[1]
+        pos.pose.covariance = cov.flatten()
+        pingerPub.publish(pos)
+        pingerMeasurement = None
+        
+    # Publish the filtered result.
+    pos = PoseWithCovarianceStamped()
+    pos.header.stamp = rospy.Time.now()
+    pos.header.frame_id = '/map'
+    pos.pose.pose.position.x = pingerTracker.x_post[0]
+    pos.pose.pose.position.y = pingerTracker.x_post[2]
+    pos.pose.pose.position.z = pingerTracker.x_post[4]
+    pos.pose.covariance = pingerTracker.P_post.flatten()
+    pingerPubfiltered.publish(pos)
+    
 
 def pinger_callback(data):
     global pinger_location
+    global sigmaRange
+    global sigmaBearing
+    global sigmaElevation
+    global pingerMeasurement
     
     if pinger_location is None:
         pinger_location = {'history':[]}
@@ -563,12 +681,18 @@ def pinger_callback(data):
         ping['position'] = pinger_map.pose.position
         
         # Rotation with uncertainty example:
-        xyz, Cxyz = rangeBearingElevationtoXYZ(range=data.range,
+        xyz, Cxyz = rotate.rangeBearingElevationtoXYZ(range=data.range,
                                                bearing=-data.bearing, 
                                                elevation=data.elevation,
-                                               sigmaRange = 3.0,
-                                               sigmaBearing = 0.03,
-                                               sigmaElevation = 0.03)
+                                               sigmaRange = sigmaRange,
+                                               sigmaBearing = sigmaBearing,
+                                               sigmaElevation = sigmaElevation)
+        
+        # the pinger's Kalman filter callback will pick up the measurement.
+        if pingerTracker is None:
+            initPingerTracker(xyz, Cxyz,isStationary=True)
+        else:
+            pingerMeasurement = (xyz,Cxyz)  # global variable. I know, forgive me.
 
     except Exception as e: #(tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
         print 'transformation exception:',e
@@ -585,4 +709,5 @@ rospy.Subscriber('/cora/sensors/pingers/pinger/range_bearing', RangeBearing, pin
 #
 
 rospy.Timer(rospy.Duration(.2), timer_callback)
+rospy.Timer(rospy.Duration(1),updatePingerFilterCallback)
 rospy.spin()
