@@ -13,4 +13,11 @@
     <arg name="yolo_config_path"           default="$(find project11_vorc)/config/"/>
   </include>
 
+  <arg name="gui" default="true" />
+  <group if="$(arg gui)">
+      <node pkg="image_view" type="image_view" name="yolo_view">
+          <remap from="image" to="/darknet_ros/detection_image"/>
+      </node>
+  </group>
+  
 </launch>

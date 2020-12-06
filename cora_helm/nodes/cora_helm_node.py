@@ -43,8 +43,8 @@ class CoraHelm:
         self.applyThrustRudder()
     
     def differentialCallback(self,data):
-        self.dd_command['left'] = data.left_thrust
-        self.dd_command['right'] = data.right_thrust
+        self.dd_command['left'] = max(-1.0, min(1.0, data.left_thrust))
+        self.dd_command['right'] = max(-1.0, min(1.0, data.right_thrust))
         self.dd_command['timestamp'] = data.header.stamp    
         self.applyThrustRudder()
         
@@ -71,8 +71,14 @@ class CoraHelm:
 
         if 'timestamp' in self.dd_command:
             if (now - self.dd_command['timestamp']) < rospy.Duration.from_sec(0.5):
+                # Normalized commands.
+                #thrust_mag = abs(self.dd_command['left']) + abs(self.dd_command['right'])
+                    
+                #self.thruster_left_pub.publish(self.dd_command['left']/thrust_mag)
+                #self.thruster_right_pub.publish(self.dd_command['right']/thrust_mag)
                 self.thruster_left_pub.publish(self.dd_command['left'])
                 self.thruster_right_pub.publish(self.dd_command['right'])
+                                               
                 return
 
         

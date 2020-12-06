@@ -1,0 +1,101 @@
+<?xml version="1.0" ?>
+<sdf version="1.6" xmlns:xacro="http://ros.org/wiki/xacro">
+  <world name="marina">
+    <xacro:include filename="$(find project11_vorc)/worlds/marina.xacro" />
+    <xacro:marina />
+
+    <!--Waves-->
+    <xacro:include filename="$(find wave_gazebo)/world_models/ocean_waves/model.xacro"/>
+    <xacro:ocean_waves scale="2.6" gain="1" period="2" />
+
+    <!--Wind. Note, wind parameters are set in the plugin.-->
+    <xacro:include filename="$(find vrx_gazebo)/worlds/xacros/usv_wind_plugin.xacro"/>
+    <xacro:usv_wind_gazebo topic_wind_speed="/vorc/debug/wind/speed"
+        topic_wind_direction="/vorc/debug/wind/direction" 
+                   direction="270"
+                   mean_vel="10"
+                   var_gain="100"
+                   var_time="5">
+      <wind_objs>
+        <wind_obj>
+          <name>cora</name>
+          <link_name>base_link</link_name>
+          <coeff_vector>0.5 0.5 0.33</coeff_vector>
+        </wind_obj>
+      </wind_objs>
+    </xacro:usv_wind_gazebo>
+    
+    <include>
+      <name>surmark950410</name>
+      <pose>400 -600 1 0 0 0</pose>
+      <uri>model://surmark950410</uri>
+    </include>
+
+    <include>
+      <name>surmark950400</name>
+      <pose>400 -598 1 0 0 0</pose>
+      <uri>model://surmark950400</uri>
+    </include>
+
+    <include>
+      <name>black_totem</name>
+      <pose>400 -596 1 0 0 0</pose>
+      <uri>model://black_totem</uri>
+    </include>
+
+    <include>
+      <name>surmark46104</name>
+      <pose>400 -594 1 0 0 0</pose>
+      <uri>model://surmark46104</uri>
+    </include>
+
+    <include>
+      <name>polyform_a7</name>
+      <pose>400 -592 1 0 0 0</pose>
+      <uri>model://polyform_a7</uri>
+    </include>
+
+    <include>
+      <name>polyform_a5</name>
+      <pose>400 -590 1 0 0 0</pose>
+      <uri>model://polyform_a5</uri>
+    </include>
+
+    <include>
+      <name>polyform_a3</name>
+      <pose>400 -588 1 0 0 0</pose>
+      <uri>model://polyform_a3</uri>
+    </include>
+
+    <include>
+      <name>yellow_totem</name>
+      <pose>400 -586 1 0 0 0</pose>
+      <uri>model://yellow_totem</uri>
+    </include>
+
+    <include>
+      <name>blue_totem</name>
+      <pose>400 -584 1 0 0 0</pose>
+      <uri>model://blue_totem</uri>
+    </include>
+
+    <include>
+      <name>green_totem</name>
+      <pose>400 -582 1 0 0 0</pose>
+      <uri>model://green_totem</uri>
+    </include>
+
+    <include>
+      <name>red_totem</name>
+      <pose>400 -580 1 0 0 0</pose>
+      <uri>model://red_totem</uri>
+    </include>
+
+    <include>
+      <name>buoy_red</name>
+      <pose>400 -578 1 0 0 0</pose>
+      <uri>model://buoy_red</uri>
+    </include>
+    
+  </world>
+</sdf>
