@@ -1,5 +1,10 @@
 <launch>
     <rosparam command="load" file="$(find project11_vorc)/config/vorc.yaml" />
+    
+    <arg name="viz" default="true" />
+    <arg name="perception" default="true" />
+    <arg name="rqt" default="false"/>
+    <arg name="camp" default="true" />
 
     <include file="$(find project11_vorc)/launch/localization.launch"/>
     
@@ -9,15 +14,19 @@
     <node pkg="cora_helm" type="simple_differential_controller.py" name="simple_controller">
         <remap from="odom" to="/cora/robot_localization/odometry/filtered"/>
     </node>
+
+    <node pkg="dp_hover" type="dp_hover_node" name="dp_hover"/>
     
     <include file="$(find project11_vorc)/launch/navigation.launch"/>
     
-    <node pkg="dp_hover" type="dp_hover_node" name="dp_hover"/>
+    <include if="$(arg perception)" file="$(find project11_vorc)/launch/perception.launch"/>
     
     <node pkg="project11_vorc" type="vorc_task_manager.py" name="task_manager"/>
 
     
-    <include file="$(find project11_vorc)/launch/viz.launch"/>
+    <include if="$(arg viz)" file="$(find project11_vorc)/launch/viz.launch"/>
+  
+    <node if="$(arg rqt)" pkg="rqt_gui" type="rqt_gui" name="rqt"/>
 
     <node pkg="joy" type="joy_node" name="joy_node">
         <param name="autorepeat_rate" value="10.0"/>
@@ -29,8 +38,7 @@
     <node pkg="command_bridge" type="command_bridge_sender_node.py" name="command_bridge_sender"/>
     <node pkg="command_bridge" type="command_bridge_receiver_node.py" name="command_bridge_receiver"/>
 
-    <node pkg="camp" type="AutonomousMissionPlanner" name="camp"  args="$(find project11_vorc)/charts/ $(find project11_vorc)/charts/L16-23800-34552-16-16_16.kap"/>
+    <node if="$(arg camp)" pkg="camp" type="AutonomousMissionPlanner" name="camp"  args="$(find project11_vorc)/charts/ $(find project11_vorc)/charts/L16-23800-34552-16-16_16.kap"/>
     
-    <include file="$(find project11_vorc)/launch/perception.launch"/>
 
 </launch>

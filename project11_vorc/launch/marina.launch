@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Gazebo world to load -->
+  <arg name="world" default="$(find project11_vorc)/worlds/marina.world" />
+  <!-- If true, run gazebo GUI -->
+  <arg name="gui" default="true" />
+  <include file="$(find vorc_gazebo)/launch/marina.launch">
+    <arg name="world"   value="$(arg world)"/>
+    <arg name="gui"          value="$(arg gui)" />
+  </include>
+</launch>
+

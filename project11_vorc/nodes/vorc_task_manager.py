@@ -261,27 +261,28 @@ def markPinger():
         pgroup.color.a = 1.0
         pgroup.size = 3.0
 
-        ll = toLL(pinger['position'].x,pinger['position'].y,pinger['position'].z)
-        gp = GeoPoint()
-        gp.latitude = ll.latitude
-        gp.longitude = ll.longitude
-        pgroup.points.append(gp)
-        vizItem.point_groups.append(pgroup)
-        
-        plist = GeoVizPointList()
-        plist.color.r = 0.6
-        plist.color.g = 0.7
-        plist.color.b = 0.8
-        plist.color.a = 1.0
-        plist.size = 3.0
-        for deltas in ( (-0.0002,0), (0,+0.0003), (+0.0002,0), (0,-0.0003), (-0.0002,0)):
+        if 'position' in pinger:
+            ll = toLL(pinger['position'].x,pinger['position'].y,pinger['position'].z)
             gp = GeoPoint()
-            gp.latitude = ll.latitude+deltas[0]
-            gp.longitude = ll.longitude+deltas[1]
-            plist.points.append(gp)
-        vizItem.lines.append(plist)
-        
-        display_publisher.publish(vizItem)
+            gp.latitude = ll.latitude
+            gp.longitude = ll.longitude
+            pgroup.points.append(gp)
+            vizItem.point_groups.append(pgroup)
+            
+            plist = GeoVizPointList()
+            plist.color.r = 0.6
+            plist.color.g = 0.7
+            plist.color.b = 0.8
+            plist.color.a = 1.0
+            plist.size = 3.0
+            for deltas in ( (-0.0002,0), (0,+0.0003), (+0.0002,0), (0,-0.0003), (-0.0002,0)):
+                gp = GeoPoint()
+                gp.latitude = ll.latitude+deltas[0]
+                gp.longitude = ll.longitude+deltas[1]
+                plist.points.append(gp)
+            vizItem.lines.append(plist)
+            
+            display_publisher.publish(vizItem)
         
 
 def publishStatus():
@@ -294,7 +295,7 @@ def publishStatus():
         hb.values.append(KeyValue('task',task.name))
         hb.values.append(KeyValue('state',task.state))
         hb.values.append(KeyValue('time','elapsed: {0}, remaining: {1}'.format(task.elapsed_time.secs,task.remaining_time.secs)))
-        hb.values.append(KeyValue('score','{:.2f}'.format(task.score)))
+        hb.values.append(KeyValue('score','{:.2g}'.format(task.score)))
         
     hb.values.append(KeyValue('---','---'))
         
@@ -497,6 +498,8 @@ gymkhana_state = None
 
 def do_gymkhana_stuff():
     global status
+    return
+    
     if status == 'idle' and pinger_location is not None and len(pinger_location['history']):
         pinger = pinger_location['history'][-1]
         
