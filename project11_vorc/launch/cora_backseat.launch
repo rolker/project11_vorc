@@ -11,7 +11,7 @@
     
     <node pkg="cora_helm" type="cora_helm_node.py" name="cora_helm"/>
 
-    <node pkg="cora_helm" type="simpler_differential_controller.py" name="simpler_controller">
+    <node pkg="cora_helm" type="simple_differential_controller.py" name="simple_controller">
         <remap from="odom" to="/cora/robot_localization/odometry/filtered"/>
     </node>
 

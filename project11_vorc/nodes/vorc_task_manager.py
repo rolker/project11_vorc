@@ -325,7 +325,7 @@ def publishStatus():
     hb.values.append(KeyValue('---','---'))
         
     if station_keeping_goal is not None:
-        hb.values.append(KeyValue('goal', '{:.1f}, {:.1f}'.format(station_keeping_goal['position'].x,station_keeping_goal['position'].y)))
+        hb.values.append(KeyValue('goal', '{:.1f}, {:.1f}'.format(station_keeping_goal.position.x,station_keeping_goal.position.y)))
         
     if station_keeping_pose_error is not None:
         hb.values.append(KeyValue('pose_error',str(station_keeping_pose_error)))
@@ -433,7 +433,9 @@ station_keeping_rms_error = None
 def station_keeping_goal_callback(data):
     global station_keeping_goal
     
-    station_keeping_goal = {'position':fromLL(data.pose.position.latitude, data.pose.position.longitude, data.pose.position.altitude), 'orientation':data.pose.orientation}
+    station_keeping_goal = Pose()
+    station_keeping_goal.position = fromLL(data.pose.position.latitude, data.pose.position.longitude, data.pose.position.altitude)
+    station_keeping_goal.orientation = data.pose.orientation
     markPosition(data.pose.position, 'station_keeping_goal')
     
 
@@ -664,7 +666,7 @@ def pinger_callback(data):
                                                sigmaBearing = sigmaBearing,
                                                sigmaElevation = sigmaElevation)
         
-        print 'vt:', vt.vector.x, vt.vector.y, vt.vector.z, 'xyz', xyz[0][0],xyz[1][0],xyz[2][0]
+        #print 'vt:', vt.vector.x, vt.vector.y, vt.vector.z, 'xyz:', xyz[0][0],xyz[1][0],xyz[2][0]
 
         if pingerTracker is None:
             initPingerTracker(xyz, Cxyz,isStationary=True)
