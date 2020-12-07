@@ -1,0 +1,27 @@
+yolo_model:
+
+  config_file:
+    name: yolov4-obj.cfg
+  weight_file:
+    name: yolov4-obj_best.weights
+  threshold:
+    value: 0.3
+  detection_classes:
+    names:
+      - yellow_totem
+      - black_totem
+      - blue_totem
+      - green_totem
+      - red_totem
+      - buoy_red
+      - polyform_a3
+      - polyform_a5
+      - polyform_a7
+      - surmark46104
+      - surmark950400
+      - surmark950410
+
+image_view:
+  enable_opencv: false
+  enable_console_output: false
+

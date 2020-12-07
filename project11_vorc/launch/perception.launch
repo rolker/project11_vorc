@@ -1,9 +1,12 @@
 <launch>
 
-  <!-- Use YOLOv4 -->
-  <arg name="network_param_file"         default="$(find project11_vorc)/config/yolov4_vorc.yaml"/>
-  <arg name="image" default="/cora/sensors/cameras/front_left_camera/image_raw" />
+  <!-- Use YOLOv4 demo with 2 classes buoy_red and green_totem-->
+  <!-- arg name="network_param_file"         default="$(find project11_vorc)/config/yolov4_vorc_demo.yaml"/-->
+  <!-- arg name="image" default="/cora/sensors/cameras/front_left_camera/image_raw" /-->
 
+  <!-- Use YOLOv4 -->
+  <arg name="network_param_file"         default="$(find project11_vorc)/config/yolov4_obj.yaml"/>
+  <arg name="image" default="/cora/sensors/cameras/front_left_camera/image_raw" />
 
   <!-- Include main launch file -->
   <include file="$(find darknet_ros)/launch/darknet_ros.launch">
