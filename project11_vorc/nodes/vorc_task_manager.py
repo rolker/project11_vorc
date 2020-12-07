@@ -376,7 +376,9 @@ def darknet_detects_callback(data):
     detected_targets = []
     try:
         transformation = tf_buffer.lookup_transform('map', data.image_header.frame_id, data.image_header.stamp)
-
+    except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+        print 'transformation exception'
+    else:
         # ground plane eq: z=0
         # line eq: P=p1+u(p2-p1)
         # P.z = p1.z+u(p2.z-p1.z) = 0
@@ -416,8 +418,6 @@ def darknet_detects_callback(data):
                         target['position'] = P
             detected_targets.append(target)
                         
-    except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-        print 'transformation exception'
                 
     
 rospy.Subscriber('/darknet_ros/bounding_boxes', BoundingBoxes, darknet_detects_callback)
@@ -518,7 +518,7 @@ def do_gymkhana_stuff():
         goal = Pose()
         goal.position = pinger_location['position_filtered']
         goal.orientation.w = 1.0
-        do_hover(goal,which_one='move_base')
+        #do_hover(goal,which_one='move_base')
         
 
 pinger_location = None
@@ -635,7 +635,9 @@ def pinger_callback(data):
         
     try:
         transformation = tf_buffer.lookup_transform('map', data.header.frame_id, data.header.stamp, rospy.Duration(1.0))
-
+    except Exception as e: #(tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+        print 'transformation exception:',e
+    else:
         v = Vector3Stamped()
         v.vector.x = data.range
         
@@ -675,8 +677,6 @@ def pinger_callback(data):
             pinger_filtered_map = tf2_geometry_msgs.do_transform_pose(pinger_filtered.pose, transformation)
             pinger_location['position_filtered'] = pinger_filtered_map.pose.position
 
-    except Exception as e: #(tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-        print 'transformation exception:',e
 
     
 

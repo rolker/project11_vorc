@@ -312,12 +312,12 @@ Visualization Manager:
       Class: rviz/Map
       Color Scheme: map
       Draw Behind: false
-      Enabled: true
+      Enabled: false
       Name: Map (octomap)
       Topic: /projected_map
       Unreliable: false
       Use Timestamp: false
-      Value: true
+      Value: false
     - Class: rviz/MarkerArray
       Enabled: false
       Marker Topic: /occupied_cells_vis_array
@@ -533,16 +533,16 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 196.09425354003906
+      Distance: 302.47174072265625
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 83.7880859375
-        Y: 74.36697387695312
-        Z: 26.447980880737305
+        X: -180.2949981689453
+        Y: 34.28202819824219
+        Z: 22.22679901123047
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
@@ -573,5 +573,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 2123
-  X: 1521
-  Y: 469
+  X: 1520
+  Y: 435
