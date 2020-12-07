@@ -43,7 +43,7 @@ def rangeBearingElevationtoXYZ(range, bearing, elevation, sigmaRange, sigmaBeari
 
     # Angle covariance.
     Crph = np.diag([sigmaElevation**2,
-                    0.0,
+                    0.0,git 
                     sigmaBearing**2])    
 
     # Build the combined covariance
@@ -87,3 +87,4 @@ def rangeBearingElevationtoXYZ(range, bearing, elevation, sigmaRange, sigmaBeari
 
     
     return (Xout, Cout)
+
