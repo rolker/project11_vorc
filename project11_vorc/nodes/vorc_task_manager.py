@@ -600,7 +600,7 @@ def initPingerTracker(X,R, isStationary = False):
                                 [Z, Z, q]])
     
     # Initalize filter with initial measurements. (increase uncertanty initially)
-    pingerTracker.x = np.array([X[0],[0],X[1],[0],X[2],[0]])
+    pingerTracker.x = np.array([X[0],[0.0],X[1],[0.0],X[2],[0.0]])
     pingerTracker.R = R * 3
     
 
