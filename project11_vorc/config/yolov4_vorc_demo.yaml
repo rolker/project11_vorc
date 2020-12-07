@@ -1,9 +1,9 @@
 yolo_model:
 
   config_file:
-    name: yolov4-obj-vorc.cfg
+    name: yolov4-obj-vorc_demo.cfg
   weight_file:
-    name: yolov4-obj_final.weights
+    name: yolov4-obj_final_demo.weights
   threshold:
     value: 0.3
   detection_classes:
