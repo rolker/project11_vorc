@@ -1,11 +1,17 @@
 # simple_differential_controller PID values
-/simple_differential_controller/linearPID_Kp: 1
-/simple_differential_controller/linearPID_Ki:  0.1
-/simple_differential_controller/linearPID_Kd:  0.0
-/simple_differential_controller/linearPID_windup: 2
-/simple_differential_controller/angularPID_Kp: 10
-/simple_differential_controller/angularPID_Ki: 1
-/simple_differential_controller/angularPID_Kd: 0.0
-/simple_differential_controller/angularPID_windup: 2
-/simple_differential_controller/enableAngularPID: 1
+/simple_differential_controller/linearPID_Kp:       1
+/simple_differential_controller/linearPID_Ki:       0.1
+/simple_differential_controller/linearPID_Kd:       0.0
+/simple_differential_controller/linearPID_windup:   2
+/simple_differential_controller/angularPID_Kp:      10
+/simple_differential_controller/angularPID_Ki:      1
+/simple_differential_controller/angularPID_Kd:      0.0
+/simple_differential_controller/angularPID_windup:  2
+/simple_differential_controller/enableAngularPID:   1
+
+# task_manger configuration
+/task_manager/pinger/sigmaRange:            3.0
+/task_manager/pinger/sigmaBearing:          0.008
+/task_manager/pinger/sigmaElevation:        0.01
+/task_manager/pinger/tracker_variance:      0.001
 
