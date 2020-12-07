@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Roland Arsenault
+# Roland Arsenault and Val Schmidt
 # Center for Coastal and Ocean Mapping
 # University of New Hampshire
 # Copyright 2020, All rights reserved.

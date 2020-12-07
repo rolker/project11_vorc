@@ -8,7 +8,10 @@ class PID:
         self.set_point = 0
         self.last_timestamp = None
         self.last_error = None
+        self.last_measured_value = None
         self.integral = 0
+        self.upper_limit = None
+        self.lower_limit = None
         
         self.debug_callback = None
 
@@ -43,8 +46,17 @@ class PID:
         derivative = 0
         if self.last_error is not None and dt is not None and dt > 0:
             derivative = (error-self.last_error)/dt
+        #if self.last_measured_value is not None and dt is not None and dt > 0:
+            #derivative = (measured_value-self.last_measured_value)/dt
             
         self.last_error = error
+        self.last_measured_value = measured_value
+
+        ret = self.Kp*error + self.Ki*self.integral + self.Kd*derivative
+        if self.lower_limit is not None:
+            ret = max(self.lower_limit,ret)
+        if self.upper_limit is not None:
+            ret = min(self.upper_limit,ret)
 
         if self.debug_callback is not None:
             debug = {}
@@ -53,6 +65,8 @@ class PID:
             debug['Kd'] = self.Kd
             debug['set_point'] = self.set_point
             debug['windup_limit'] = self.windup_limit
+            debug['upper_limit'] = self.upper_limit
+            debug['lower_limit'] = self.lower_limit
             debug['measured_value'] = measured_value
             debug['timestamp'] = timestamp
             debug['error'] = error
@@ -62,10 +76,10 @@ class PID:
             debug['p'] = self.Kp*error
             debug['i'] = self.Ki*self.integral
             debug['d'] = self.Kd*derivative
-            debug['return'] = self.Kp*error + self.Ki*self.integral + self.Kd*derivative
+            debug['return'] = ret
             self.debug_callback(debug)
 
-        return self.Kp*error + self.Ki*self.integral + self.Kd*derivative
+        return ret
 
         
         

@@ -16,7 +16,7 @@ from vrx_gazebo.msg import Task
 from std_msgs.msg import Float64, Float64MultiArray, String
 from geographic_msgs.msg import GeoPoseStamped, GeoPoint, GeoPath
 from geometry_msgs.msg import PoseStamped, Twist, TransformStamped, Vector3Stamped
-from geometry_msgs.msg import PoseWithCovarianceStamped
+from geometry_msgs.msg import PoseWithCovarianceStamped, Pose
 from marine_msgs.msg import Heartbeat
 from marine_msgs.msg import KeyValue
 from geographic_visualization_msgs.msg import GeoVizItem, GeoVizPointList
@@ -103,27 +103,7 @@ def timer_callback(event):
             goal = wayfinding_waypoints[wayfinding_current_waypoint]
             
         if goal is not None:
-            
-            hg = dp_hover.msg.dp_hoverGoal()
-            hg.target.header.frame_id = 'map'
-            hg.target.header.stamp = rospy.get_rostime()
-            hg.target.pose.position = goal['position']
-            hg.target.pose.orientation = goal['orientation']
-            
-            dp_hover_action_client.wait_for_server()
-            dp_hover_action_client.send_goal(hg,dp_hover_done_callback, None, dp_hover_feedback_callback)
-            
-            status = 'dp_hover'
-        
-            #mbg = move_base_msgs.msg.MoveBaseGoal()
-            #mbg.target_pose.header.frame_id = 'map'
-            #mbg.target_pose.header.stamp = rospy.get_rostime()
-            #mbg.target_pose.pose.position = goal_map
-            #mbg.target_pose.pose.orientation = goal.pose.orientation
-
-            #move_base_action_client.wait_for_server()
-            #move_base_action_client.send_goal(mbg,move_base_done_callback, None, move_base_feedback_callback)
-            #status = 'move_base'
+            do_hover(goal)
             
     if status == 'dp_hover':
         if task is not None and task.name == 'wayfinding':
@@ -136,6 +116,30 @@ def timer_callback(event):
     if task is not None and task.name == 'gymkhana':
         do_gymkhana_stuff()
 
+def do_hover(goal, which_one='move_base'):
+    global status
+    
+    if which_one == 'dp_hover':
+        hg = dp_hover.msg.dp_hoverGoal()
+        hg.target.header.frame_id = 'map'
+        hg.target.header.stamp = rospy.get_rostime()
+        hg.target.pose = goal
+        
+        dp_hover_action_client.wait_for_server()
+        dp_hover_action_client.send_goal(hg,dp_hover_done_callback, None, dp_hover_feedback_callback)
+        
+        status = 'dp_hover'
+
+    if which_one == 'move_base':
+        mbg = move_base_msgs.msg.MoveBaseGoal()
+        mbg.target_pose.header.frame_id = 'map'
+        mbg.target_pose.header.stamp = rospy.get_rostime()
+        mbg.target_pose.pose = goal
+
+        move_base_action_client.wait_for_server()
+        move_base_action_client.send_goal(mbg,move_base_done_callback, None, move_base_feedback_callback)
+        status = 'move_base'
+    
 
 #
 # move_base stuff
@@ -256,20 +260,20 @@ def markTargets():
         display_publisher.publish(vizItem)
 
 def markPinger():
-    if pinger_location is not None and len(pinger_location['history']):
-        pinger = pinger_location['history'][-1]
-        vizItem = GeoVizItem()
-        vizItem.id = 'pinger'
-        
-        pgroup = GeoVizPointList()
-        pgroup.color.r = 0.8
-        pgroup.color.g = 0.7
-        pgroup.color.b = 0.6
-        pgroup.color.a = 1.0
-        pgroup.size = 3.0
+    for measurement_type in ('position', 'position_filtered'):
+        if pinger_location is not None and measurement_type in pinger_location:
+            pinger = pinger_location[measurement_type]
+            vizItem = GeoVizItem()
+            vizItem.id = 'pinger_'+measurement_type
+            
+            pgroup = GeoVizPointList()
+            pgroup.color.r = 0.8
+            pgroup.color.g = 0.7
+            pgroup.color.b = 0.6
+            pgroup.color.a = 1.0
+            pgroup.size = 3.0
 
-        if 'position' in pinger:
-            ll = toLL(pinger['position'].x,pinger['position'].y,pinger['position'].z)
+            ll = toLL(pinger.x,pinger.y,pinger.z)
             gp = GeoPoint()
             gp.latitude = ll.latitude
             gp.longitude = ll.longitude
@@ -278,6 +282,8 @@ def markPinger():
             
             plist = GeoVizPointList()
             plist.color.r = 0.6
+            if measurement_type == 'position_filtered':
+                plist.color.r = 0.9
             plist.color.g = 0.7
             plist.color.b = 0.8
             plist.color.a = 1.0
@@ -505,36 +511,17 @@ gymkhana_state = None
 
 def do_gymkhana_stuff():
     global status
-    return
     
-    if status == 'idle' and pinger_location is not None and len(pinger_location['history']):
-        pinger = pinger_location['history'][-1]
-        
-        #mbg = move_base_msgs.msg.MoveBaseGoal()
-        #mbg.target_pose.header.frame_id = 'map'
-        #mbg.target_pose.header.stamp = rospy.get_rostime()
-        #mbg.target_pose.pose.position = pinger['position']
-        #mbg.target_pose.pose.orientation.w = 1.0
-
-        #move_base_action_client.wait_for_server()
-        #move_base_action_client.send_goal(mbg,move_base_done_callback, None, move_base_feedback_callback)
-        #status = 'move_base'
-
-        hg = dp_hover.msg.dp_hoverGoal()
-        hg.target.header.frame_id = 'map'
-        hg.target.header.stamp = rospy.get_rostime()
-        hg.target.pose.position = pinger['position']
-        hg.target.pose.orientation.w = 1.0
-        
-        dp_hover_action_client.wait_for_server()
-        dp_hover_action_client.send_goal(hg,dp_hover_done_callback, None, dp_hover_feedback_callback)
-        
-        status = 'dp_hover'
+    if status == 'idle' and pinger_location is not None and 'position_filtered' in pinger_location:
+        goal = Pose()
+        goal.position = pinger_location['position_filtered']
+        goal.orientation.w = 1.0
+        do_hover(goal,which_one='move_base')
         
 
 pinger_location = None
 pingerTracker = None
-pingerMeasurement = None
+
 pingerPubfiltered = rospy.Publisher('/pinger/map/filtered',PoseWithCovarianceStamped,queue_size=10)
 pingerPub = rospy.Publisher('/pinger/map/raw',PoseWithCovarianceStamped,queue_size=10)
 
@@ -553,8 +540,6 @@ except:
 def initPingerTracker(X,R, isStationary = False):
     ''' Initalize a Kalman Filter to Track the Pinger Measurements'''
     global pingerTracker
-    global pingerMeasurement
-    pingerMeasurement = None
     
     pingerTracker = KalmanFilter(dim_x=6,dim_z=3)
     
@@ -604,10 +589,7 @@ def initPingerTracker(X,R, isStationary = False):
     pingerTracker.R = R * 3
     
 
-def updatePingerFilterCallback(data):
-    ''' Called from a rospy.Timer at 1 Hz to update the Kalman Filter'''
-    global pingerMeasurement
-    global pingerPub
+def updatePingerFilter(pingerMeasurement):
     # If the tracker hasn't been initalized, do nothing.
     if pingerTracker is None:
         return
@@ -622,7 +604,7 @@ def updatePingerFilterCallback(data):
         # Publish the measurement.
         pos = PoseWithCovarianceStamped()
         pos.header.stamp = rospy.Time.now()
-        pos.header.frame_id = '/map'
+        pos.header.frame_id = 'cora/pinger'
         pos.pose.pose.position.x = pingerMeasurement[0][0]
         pos.pose.pose.position.y = pingerMeasurement[0][1]
         pos.pose.pose.position.z = pingerMeasurement[0][2]
@@ -630,31 +612,25 @@ def updatePingerFilterCallback(data):
         cov[::2,::2] = pingerMeasurement[1]
         pos.pose.covariance = cov.flatten()
         pingerPub.publish(pos)
-        pingerMeasurement = None
         
     # Publish the filtered result.
     pos = PoseWithCovarianceStamped()
     pos.header.stamp = rospy.Time.now()
-    pos.header.frame_id = '/map'
+    pos.header.frame_id = 'cora/pinger'
     pos.pose.pose.position.x = pingerTracker.x_post[0]
     pos.pose.pose.position.y = pingerTracker.x_post[2]
     pos.pose.pose.position.z = pingerTracker.x_post[4]
     pos.pose.covariance = pingerTracker.P_post.flatten()
     pingerPubfiltered.publish(pos)
+    return pos
     
 
 def pinger_callback(data):
     global pinger_location
-    global sigmaRange
-    global sigmaBearing
-    global sigmaElevation
-    global pingerMeasurement
     
     if pinger_location is None:
-        pinger_location = {'history':[]}
+        pinger_location = {}
         
-    ping = {'range':data.range, 'bearing':data.bearing, 'elevation':data.elevation}
-    
     try:
         transformation = tf_buffer.lookup_transform('map', data.header.frame_id, data.header.stamp, rospy.Duration(1.0))
 
@@ -678,7 +654,7 @@ def pinger_callback(data):
         pinger.pose.orientation.w = 1.0
 
         pinger_map = tf2_geometry_msgs.do_transform_pose(pinger, transformation)
-        ping['position'] = pinger_map.pose.position
+        pinger_location['position'] = pinger_map.pose.position
         
         # Rotation with uncertainty example:
         xyz, Cxyz = rotate.rangeBearingElevationtoXYZ(range=data.range,
@@ -688,18 +664,18 @@ def pinger_callback(data):
                                                sigmaBearing = sigmaBearing,
                                                sigmaElevation = sigmaElevation)
         
-        # the pinger's Kalman filter callback will pick up the measurement.
+        print 'vt:', vt.vector.x, vt.vector.y, vt.vector.z, 'xyz', xyz[0][0],xyz[1][0],xyz[2][0]
+
         if pingerTracker is None:
             initPingerTracker(xyz, Cxyz,isStationary=True)
         else:
-            pingerMeasurement = (xyz,Cxyz)  # global variable. I know, forgive me.
+            pinger_filtered = updatePingerFilter((xyz,Cxyz))
+            pinger_filtered_map = tf2_geometry_msgs.do_transform_pose(pinger_filtered.pose, transformation)
+            pinger_location['position_filtered'] = pinger_filtered_map.pose.position
 
     except Exception as e: #(tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
         print 'transformation exception:',e
 
-
-    
-    pinger_location['history'].append(ping)
     
 
 rospy.Subscriber('/cora/sensors/pingers/pinger/range_bearing', RangeBearing, pinger_callback)
@@ -709,5 +685,4 @@ rospy.Subscriber('/cora/sensors/pingers/pinger/range_bearing', RangeBearing, pin
 #
 
 rospy.Timer(rospy.Duration(.2), timer_callback)
-rospy.Timer(rospy.Duration(1),updatePingerFilterCallback)
 rospy.spin()

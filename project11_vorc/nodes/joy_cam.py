@@ -14,26 +14,28 @@ right_image = None
 
 bridge = CvBridge()
 
+filename_prefix = ''
+
 def joy_callback(data):
     global button
     
     if button == 0 and data.buttons[3] == 1:
-        print 'snap!'
         timestamp  = datetime.datetime.now().isoformat().replace(':','.')
+        print 'snap!',filename_prefix+timestamp
         if left_image is not None:
             try:
                 cv2_img = bridge.imgmsg_to_cv2(left_image, "bgr8")
             except CvBridgeError, e:
                 print(e)
             else:
-                cv2.imwrite(timestamp+'_left.jpeg', cv2_img)
+                cv2.imwrite(filename_prefix+timestamp+'_left.jpeg', cv2_img)
         if right_image is not None:
             try:
                 cv2_img = bridge.imgmsg_to_cv2(right_image, "bgr8")
             except CvBridgeError, e:
                 print(e)
             else:
-                cv2.imwrite(timestamp+'_right.jpeg', cv2_img)
+                cv2.imwrite(filename_prefix+timestamp+'_right.jpeg', cv2_img)
     button = data.buttons[3]
 
 def left_image_callback(data):
@@ -45,6 +47,8 @@ def right_image_callback(data):
     right_image = data
 
 rospy.init_node("joy_cam")
+
+filename_prefix = rospy.get_param('~filename_prefix', '')
 
 rospy.Subscriber("/joy", Joy, joy_callback)
 rospy.Subscriber("/cora/sensors/cameras/front_left_camera/image_raw", Image, left_image_callback)

@@ -22,16 +22,16 @@ def rangeBearingElevationtoXYZ(range, bearing, elevation, sigmaRange, sigmaBeari
     
     '''
 
-    X = np.array([[0.0], [range], [0.0]])
+    X = np.array([[range], [0.0], [0.0]])
     x = X[0][0]
     y = X[1][0]
     z = X[2][0]
 
     Cxyz = np.diag([0.0,sigmaRange**2,0.0])
 
-    r = elevation
-    p = 0.0
-    h = bearing
+    r = 0
+    p = elevation
+    h = -bearing
 
 
     sin_r = np.sin(r)
