@@ -101,9 +101,13 @@ class Navigator:
         rospy.Subscriber('/cora/robot_localization/odometry/filtered', Odometry, self.odometry_callback)
         rospy.Subscriber('/cmd_vel', Twist, self.cmd_vel_callback)
 
-        self.make_plan_service = rospy.ServiceProxy('/move_base/make_plan', GetPlan)
-        self.fromll_service = rospy.ServiceProxy('/cora/robot_localization/fromLL', FromLL)
-        self.toll_service = rospy.ServiceProxy('/cora/robot_localization/toLL', ToLL)
+        rospy.wait_for_service('/move_base/make_plan')
+        rospy.wait_for_service('/cora/robot_localization/fromLL')
+        rospy.wait_for_service('/cora/robot_localization/toLL')
+
+        self.make_plan_service = rospy.ServiceProxy('/move_base/make_plan', GetPlan, persistent=True)
+        self.fromll_service = rospy.ServiceProxy('/cora/robot_localization/fromLL', FromLL, persistent=True)
+        self.toll_service = rospy.ServiceProxy('/cora/robot_localization/toLL', ToLL, persistent=True)
 
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
@@ -127,8 +131,9 @@ class Navigator:
     def make_plan(self):
         if self.goal is None:
             self.plan = None
+            self.plan_index = 0
         elif self.odometry is not None:
-            rospy.wait_for_service('/move_base/make_plan')
+            rospy.logdebug('planning...')
             try:
                 r = GetPlanRequest()
                 r.goal.pose = self.goal
@@ -136,13 +141,13 @@ class Navigator:
                 r.start.header.frame_id = 'map'
                 r.start.pose = self.odometry.pose.pose
                 self.plan = self.make_plan_service(r).plan
+                self.plan.header.stamp = rospy.Time.now()
                 self.plan_index = 0
                 self.taskManager.camp.showPlan(self.plan)
             except rospy.ServiceException as e:
-                print("Service call failed: %s"%e)
+                print("Make plan service call failed: %s"%e)
     
     def fromLL(self, lat, lon, alt=0.0):
-        rospy.wait_for_service('/cora/robot_localization/fromLL')
         try:
             r = FromLLRequest()
             r.ll_point.latitude = lat
@@ -150,10 +155,9 @@ class Navigator:
             r.ll_point.altitude = alt
             return self.fromll_service(r).map_point
         except rospy.ServiceException as e:
-            print("Service call failed: %s"%e)
+            print("FromLL Service call failed: %s"%e)
 
     def toLL(self, x, y, z=0.0):
-        rospy.wait_for_service('/cora/robot_localization/toLL')
         try:
             r = ToLLRequest()
             r.map_point.x = x
@@ -163,7 +167,7 @@ class Navigator:
             if ret is not None:
                 return ret.ll_point
         except Exception as e:
-            print("Service call failed: %s"%e)
+            print("ToLL Service call failed: %s"%e)
 
     def publishStatus(self, heartbeat):
         if self.odometry is not None:
@@ -188,7 +192,7 @@ class Navigator:
     def iterate(self):
         self.helm.iterate()
         if self.plan is not None:
-            if rospy.Time()-self.plan.header.stamp > self.plan_expiration:
+            if rospy.Time.now()-self.plan.header.stamp > self.plan_expiration:
                 self.make_plan()
             while self.plan_index < len(self.plan.poses) and self.distanceBearingFrom(self.plan.poses[self.plan_index].pose)[0] < self.min_waypoint_distance:
                 self.plan_index += 1
