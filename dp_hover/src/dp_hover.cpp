@@ -257,9 +257,14 @@ public:
 
                     }  
                 }else{
-                    ROS_DEBUG("Twist to Desired Heading");
-                    if (abs(m_lastYawerror) != yawerror) { cmd.linear.x=-0.3;}
-                    cmd.linear.x = 0.0;
+                    if (m_yaw_control == TRUE) {
+                        ROS_DEBUG("Twist to Desired Heading");
+                        if (abs(m_lastYawerror) != yawerror) { cmd.linear.x=-0.3;}
+                        cmd.linear.x = 0.0;
+                    }
+                    else{
+                        cmd.linear.x = 0.0;   
+                    }
                 }
                 cmd.angular.z = std::max(-m_maximum_angular_speed,std::min(m_maximum_angular_speed,float(yawerror)));
             }else{
@@ -571,7 +576,7 @@ private:
     // goal variables
     gz4d::geo::Point<double,gz4d::geo::WGS84::LatLon> m_target_position;
     double m_target_yaw;
-    bool m_yaw_control;   // Attempt to control yaw if set.
+    bool m_yaw_control = TRUE;   // Attempt to control yaw if set.
     
     float m_minimum_distance; // meters
     float m_maximum_distance; // meters
