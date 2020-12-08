@@ -55,18 +55,6 @@ class TaskManager:
         self.task_sub = rospy.Subscriber('/vorc/task/info', Task, self.task_callback)
 
     def task_callback(self, data):
-        ''' Notes for handling task states:
-        
-        Initial:    After Gazebo starts, the task is in the ​initial state. The robot’s motion is fixed in the X (surge), Y (sway) and yaw degrees of freedom, but allowed to move in Z (heave), pitch and roll degrees of freedom. Thus, the robot is pushed up and down by the waves and wind and will change its orientation (except in yaw) but stays in the same 2D position. The purpose of this initial state is to allow for simulation startup transients to decay and for all the user’s software to have sufficient time to initialize.
-
-        Ready:  The task transitions to ​ready when simulation time reaches the value ready_time. In the ​ready state, the robot motion is free in all degrees of freedom and is under the participant’s full control. While in the ready state no scoring is performed.
-
-        Running:    The task transitions to ​running when simulation time reaches the value running_time. In the ​running state, the task officially starts. The scoring and the task timer are enabled.
-
-        Finished:
-        The task transitions to ​finished when the remaining_time field of the task message reaches 0 or when the task is considered complete. If all task time has been consumed, but the task has not been fully solved, the field timed_out of the task message will be set to true. The score will not be updated in this state.
-        '''
-        
         self.task_info = data
         
         if self.task is None:
