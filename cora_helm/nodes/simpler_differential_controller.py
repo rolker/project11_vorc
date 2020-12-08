@@ -24,7 +24,7 @@ max_linear_speed = 30.0
 max_angular_speed = 0.39
 
 linear_pid  = pid_controller.PID( Kp=0.25, Ki=0.2, Kd=0.01, windup_limit=0.5 )
-angular_pid = pid_controller.PID( Kp=2,   Ki=0.4 ,Kd=0.0,  windup_limit=5 )
+angular_pid = pid_controller.PID( Kp=3,   Ki=0.4 ,Kd=0.0,  windup_limit=5 )
 
 linear_pid.lower_limit = -1.0
 linear_pid.upper_limit = 1.0

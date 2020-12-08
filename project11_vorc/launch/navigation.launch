@@ -5,11 +5,11 @@
         <param name="radius" value="5.0"/>
     </node>
     
-    <node pkg="octomap_server" type="octomap_server_node" name="octomap">
+<!--    <node pkg="octomap_server" type="octomap_server_node" name="octomap">
         <remap from="cloud_in" to="/cora/sensors/lidars/front_lidar/points_filtered"/>
         <param name="resolution" value="1.0"/>
     </node>
-    <node pkg="rosservice" type="rosservice" name="set_octomap_log_level" args="call --wait /octomap/set_logger_level 'ros' 'error'" />
+    <node pkg="rosservice" type="rosservice" name="set_octomap_log_level" args="call --wait /octomap/set_logger_level 'ros' 'error'" />-->
 
 <!--    <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pc_to_laserscan">
         <remap from="cloud_in" to="/cora/sensors/lidars/front_lidar/points_filtered"/>
@@ -29,5 +29,6 @@
         <rosparam file="$(find project11_vorc)/config/local_costmap_params.yaml" command="load" />
         <rosparam file="$(find project11_vorc)/config/global_costmap_params.yaml" command="load" /> 
         <rosparam file="$(find project11_vorc)/config/base_local_planner_params.yaml" command="load" />
+        <param name="base_global_planner" value="global_planner/GlobalPlanner"/>
     </node>
 </launch>
