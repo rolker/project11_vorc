@@ -5,8 +5,10 @@ import tf2_ros
 import tf2_geometry_msgs
 
 from nav_msgs.msg import OccupancyGrid
-from geographic_visualization_msgs.msg import GeoVizItem, GeoVizPointList
+from geographic_visualization_msgs.msg import GeoVizItem, GeoVizPointList, GeoVizPolygon
 from geometry_msgs.msg import PoseStamped
+from geographic_msgs.msg import GeoPoint
+
 from robot_localization.srv import *
 
 def toLL(x, y, z=0.0):
@@ -28,24 +30,52 @@ def costmap_callback(data):
     except Exception as e:
         rospy.logwarn(str(e))
     else:
-        print data.info
-        
         origin = PoseStamped()
         origin.pose = data.info.origin
         
         origin_map = tf2_geometry_msgs.do_transform_pose(origin, transformation)
-        
-        print 'origin in map frame:',origin_map
-        
         origin_ll = toLL(origin_map.pose.position.x,origin_map.pose.position.y,origin_map.pose.position.z)
-        print origin_ll
         
         height_meters = data.info.resolution*data.info.height
         width_meters = data.info.resolution*data.info.width
         opposite_ll = toLL(origin_map.pose.position.x+height_meters,origin_map.pose.position.y+width_meters,origin_map.pose.position.z)
-        print opposite_ll
         
+        vizItem = GeoVizItem()
         
+        vizItem.id = 'occupency_grid'
+        plist = GeoVizPointList()
+        plist.color.r = 0.0
+        plist.color.g = 0.5
+        plist.color.b = 1.0
+        plist.color.a = 1.0
+        corners = [origin_ll,opposite_ll]
+        for i in ( (0,0), (0,1), (1,1), (1,0), (0,0) ):
+            gp = GeoPoint()
+            gp.latitude = corners[i[0]].latitude
+            gp.longitude = corners[i[1]].longitude
+            plist.points.append(gp)
+        vizItem.lines.append(plist)
+        
+        dlat = (opposite_ll.latitude - origin_ll.latitude)/float(data.info.width)
+        dlong = (opposite_ll.longitude - origin_ll.longitude)/float(data.info.height)
+        
+
+        for row in range(data.info.height):
+            for col in range(data.info.width):
+                if data.data[row*data.info.width+col] > 0:
+                    p = GeoVizPolygon()
+                    p.fill_color.r = 0.1
+                    p.fill_color.g = 0.1
+                    p.fill_color.b = 0.1
+                    p.fill_color.a = 0.7
+                    for i in ( (0,0), (0,1), (1,1), (1,0), (0,0) ):
+                        gp = GeoPoint()
+                        gp.latitude = origin_ll.latitude+dlat*(row+i[0])
+                        gp.longitude = origin_ll.longitude+dlong*(col+i[1])
+                        p.outer.points.append(gp)
+
+                    vizItem.polygons.append(p)
+        display_publisher.publish(vizItem)
         
 grid_sub = None
 # allow tf_buffer to fill up a bit before asking for a grid

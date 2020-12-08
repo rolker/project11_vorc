@@ -8,3 +8,4 @@ observation_sources: point_cloud_sensor
 
 point_cloud_sensor: {sensor_frame: cora/front_lidar_link, data_type: PointCloud2, topic: /cora/sensors/lidars/front_lidar/points_filtered, marking: true, clearing: false}
 
+visualize_potential: true
