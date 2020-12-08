@@ -62,6 +62,8 @@ public:
         if(m_action_server.isActive()) {
 
 
+            ROS_DEBUG("yaw control: %d", m_yaw_control);
+            
             double now = ros::Time::now().toSec();
             double timedelta = now - lastOdomTime;
             
@@ -333,6 +335,7 @@ public:
         m.getRPY(roll,pitch,yaw);
 
         m_target_yaw = yaw;
+        m_yaw_control = goal->yaw_control;
         
         // Get the default Kp PID value for heading so we can change it back later.
         m_node_handle.getParam("/simple_differential_controller/angularPID_Kp", m_defaultAngularPID_Kp);
@@ -568,6 +571,7 @@ private:
     // goal variables
     gz4d::geo::Point<double,gz4d::geo::WGS84::LatLon> m_target_position;
     double m_target_yaw;
+    bool m_yaw_control;   // Attempt to control yaw if set.
     
     float m_minimum_distance; // meters
     float m_maximum_distance; // meters
