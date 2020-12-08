@@ -77,7 +77,8 @@ class TaskManager:
             
             elif self.task_info.state == 'ready':
                 # Must begin navigating here. Maybe station keep until in Running?
-                
+                pass
+            
             elif self.task_info.state == 'running':
                 # Execute the task.
             
@@ -86,6 +87,7 @@ class TaskManager:
 
             elif self.task_info.state = 'finished':
                 # All done. No more scoring. Stationkeep???
+                pass
 
     def iterate(self, event):    
         if self.task is not None:
