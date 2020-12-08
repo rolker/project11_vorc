@@ -29,6 +29,9 @@ import numpy as np
 import math
 
 from filterpy.kalman import KalmanFilter
+from filterpy.kalman import MerweScaledSigmaPoints
+from filterpy.kalman import UnscentedKalmanFilter
+
 from filterpy.common import Q_discrete_white_noise
 from task_manager_utilities import rotate
 
@@ -52,7 +55,20 @@ class TaskManager:
         self.task_sub = rospy.Subscriber('/vorc/task/info', Task, self.task_callback)
 
     def task_callback(self, data):
+        ''' Notes for handling task states:
+        
+        Initial:    After Gazebo starts, the task is in the ​initial state. The robot’s motion is fixed in the X (surge), Y (sway) and yaw degrees of freedom, but allowed to move in Z (heave), pitch and roll degrees of freedom. Thus, the robot is pushed up and down by the waves and wind and will change its orientation (except in yaw) but stays in the same 2D position. The purpose of this initial state is to allow for simulation startup transients to decay and for all the user’s software to have sufficient time to initialize.
+
+        Ready:  The task transitions to ​ready when simulation time reaches the value ready_time. In the ​ready state, the robot motion is free in all degrees of freedom and is under the participant’s full control. While in the ready state no scoring is performed.
+
+        Running:    The task transitions to ​running when simulation time reaches the value running_time. In the ​running state, the task officially starts. The scoring and the task timer are enabled.
+
+        Finished:
+        The task transitions to ​finished when the remaining_time field of the task message reaches 0 or when the task is considered complete. If all task time has been consumed, but the task has not been fully solved, the field timed_out of the task message will be set to true. The score will not be updated in this state.
+        '''
+        
         self.task_info = data
+        
         if self.task is None:
             if self.task_info.state != 'inital': #wait until we're out of initial to make sure all nodes are done loading and stuff
                 if self.task_info.name == 'stationkeeping':
@@ -640,6 +656,7 @@ pingerTracker = None
 
 pingerPubfiltered = rospy.Publisher('/pinger/map/filtered',PoseWithCovarianceStamped,queue_size=10)
 pingerPub = rospy.Publisher('/pinger/map/raw',PoseWithCovarianceStamped,queue_size=10)
+        
 
 try:
     sigmaRange = rospy.get_param("/task_manager/pinger/sigmaRange")
@@ -663,25 +680,33 @@ def initPingerTracker(X,R, isStationary = False):
 
     if isStationary:
             # Set up 1st order transition matrix.
-            pingerTracker.F = np.array([[1, dt, 0,  0, 0, 0],
-                      [0,  0, 0,  0, 0, 0],
-                      [0,  0, 1, dt, 0, 0],
-                      [0,  0, 0,  0, 0, 0],
-                      [0, 0, 0, 0, 1, dt],
-                      [0, 0, 0, 0, 0, 0]])
+            pingerTracker.F = np.array([[1., dt, 0.,  0., 0., 0.],
+                      [0.,  0., 0.,  0., 0., 0.],
+                      [0.,  0., 1., dt, 0., 0.],
+                      [0.,  0., 0.,  0., 0., 0.],
+                      [0., 0., 0., 0., 1, dt],
+                      [0., 0., 0., 0., 0., 0.]])
+            pingerTracker.F = np.array([[1., 0., 0.,  0., 0., 0.],
+                      [0.,  0., 0.,  0., 0., 0.],
+                      [0.,  0., 1., 0., 0., 0.],
+                      [0.,  0., 0.,  0., 0., 0.],
+                      [0., 0., 0., 0., 1, 0.],
+                      [0., 0., 0., 0., 0., 0.]])
     else:
         # Set up 1st order transition matrix.
-        pingerTracker.F = np.array([[1, dt, 0,  0, 0, 0],
-                            [0,  1, 0,  0, 0, 0],
-                            [0,  0, 1, dt, 0, 0],
-                            [0,  0, 0,  1, 0, 0],
-                            [0, 0, 0, 0, 1, dt],
-                            [0, 0, 0, 0, 0, 1]])
+        pingerTracker.F = np.array([[1, dt, 0.,  0., 0., 0.],
+                            [0., 1., 0.,  0., 0., 0.],
+                            [0., 0., 1., dt, 0., 0.],
+                            [0., 0., 0.,  1., 0., 0.],
+                            [0., 0., 0., 0., 1., dt],
+                            [0., 0., 0., 0., 0., 1.]])
     
     # Set up measurment matrix (only measuring position)
-    pingerTracker.H = np.array([[1, 0, 0, 0, 0, 0],
-                                [0, 0, 1, 0, 0, 0],
-                                [0, 0, 0, 0, 1, 0]])
+    pingerTracker.H = np.array([[1., 0., 0., 0., 0., 0.],
+                                [0., 0., 1., 0., 0., 0.],
+                                [0., 0., 0., 0., 1., 0.]])
+    # Set up measurment matrix (only measuring position)
+    # pingerTracker.H = np.eye(6)
     
     # Set up process model covariance (assumes update rate is constant)
     #qvar = ros.get_param("/task_manager/pinger/tracker_variance")
@@ -690,7 +715,7 @@ def initPingerTracker(X,R, isStationary = False):
         qvar = ros.get_param("/task_manager/pinger/tracker_variance")
     except:
         rospy.logwarn("Unable to retrieve pinger tracker variance from parameter server.")
-        rospy.logwarn("Setting default: 0.5")
+        rospy.logwarn("Setting default: 0.25")
         qvar = 0.5
         
     q = Q_discrete_white_noise(dim=2,dt=dt,var=qvar)
@@ -699,10 +724,14 @@ def initPingerTracker(X,R, isStationary = False):
     pingerTracker.Q = np.block([[ q, Z, Z],
                                 [Z, q, Z],
                                 [Z, Z, q]])
+    #pingerTracker.Q[1,1] = .01
+    #pingerTracker.Q[3,3] = .01
+    #pingerTracker.Q[5,5] = .01
     
     # Initalize filter with initial measurements. (increase uncertanty initially)
     pingerTracker.x = np.array([X[0],[0.0],X[1],[0.0],X[2],[0.0]])
-    pingerTracker.R = R * 3
+    pingerTracker.P = np.zeros((6,6))
+    pingerTracker.P[::2,::2] = R *3.0
     
 
 def updatePingerFilter(pingerMeasurement):
@@ -710,13 +739,15 @@ def updatePingerFilter(pingerMeasurement):
     if pingerTracker is None:
         return
     
+
     # Otherwise update the filter an incorprate a measurement if there's a new one.
     pingerTracker.predict()
+
     if pingerMeasurement is not None:
         # Assign the fields into the Kalman filter.
         pingerTracker.R = pingerMeasurement[1]
         pingerTracker.update(pingerMeasurement[0])
-        
+
         # Publish the measurement.
         pos = PoseWithCovarianceStamped()
         pos.header.stamp = rospy.Time.now()
@@ -738,7 +769,57 @@ def updatePingerFilter(pingerMeasurement):
     pos.pose.pose.position.z = pingerTracker.x_post[4]
     pos.pose.covariance = pingerTracker.P_post.flatten()
     pingerPubfiltered.publish(pos)
+    
+    ## WARNING ##
+    #print(pingerTracker)
+    
     return pos
+
+
+
+def init_UKFPingerFilter(X,R):
+    global pingerTracker
+    
+    dt = 1.0
+    
+    def H_pingerUKF(x):
+        global pinger_location
+        
+        return pinger_location['position']
+    def F_pingerUKF(x,dt):
+        # Set up 1st order transition matrix.
+        F = np.array([[1., dt, 0., 0., 0., 0.],
+                    [0., 1., 0.,  0., 0., 0.],
+                    [0., 0., 1., dt, 0., 0.],
+                    [0., 0., 0.,  1., 0., 0.],
+                    [0., 0., 0., 0., 1., dt],
+                    [0., 0., 0., 0., 0., 1.]])
+        return F
+
+    points = MerweScaledSigmaPoints(n=6, alpha=0.1, beta=2., kappa=0.)
+    pingerTracker = UnscentedKalmanFilter(dim_x=6, dim_z=3, dt=dt, 
+                                          fx=F_pingerUKF,hx=H_pingerUKF,points=points)
+                                          
+    
+    try:
+        qvar = ros.get_param("/task_manager/pinger/tracker_variance")
+    except:
+        rospy.logwarn("Unable to retrieve pinger tracker variance from parameter server.")
+        rospy.logwarn("Setting default: 0.25")
+        qvar = 0.05
+        
+    q = Q_discrete_white_noise(dim=2,dt=dt,var=qvar)
+    
+    Z = np.zeros((2,2))
+    pingerTracker.Q = np.block([[ q, Z, Z],
+                                [Z, q, Z],
+                                [Z, Z, q]])
+    
+    # Initalize filter with initial measurements. (increase uncertanty initially)
+    pingerTracker.x = np.array([X[0],[0.0],X[1],[0.0],X[2],[0.0]])
+    pingerTracker.P = np.zeros((6,6))
+    pingerTracker.P[::2,::2] = R *3.0
+    
     
 
 def pinger_callback(data):
@@ -765,7 +846,7 @@ def pinger_callback(data):
         t.transform.rotation.w = q[3]
 
         vt = tf2_geometry_msgs.do_transform_vector3(v, t)
-    
+
         pinger = PoseStamped()
         pinger.pose.position.x = vt.vector.x
         pinger.pose.position.y = vt.vector.y
@@ -774,23 +855,87 @@ def pinger_callback(data):
 
         pinger_map = tf2_geometry_msgs.do_transform_pose(pinger, transformation)
         pinger_location['position'] = pinger_map.pose.position
+
+        tf_pinger_to_baselink = taskManager.navigator.tf_buffer.lookup_transform('cora/pinger','cora/base_link',data.header.stamp, rospy.Duration(1.0))
+        #print(tf_pinger_to_baselink)
         
-        # Rotation with uncertainty example:
+        # Rotation pinger location with uncertainty into base_link.:
         xyz, Cxyz = rotate.rangeBearingElevationtoXYZ(range=data.range,
-                                               bearing=-data.bearing, 
-                                               elevation=data.elevation,
-                                               sigmaRange = sigmaRange,
-                                               sigmaBearing = sigmaBearing,
-                                               sigmaElevation = sigmaElevation)
+                                                bearing=-data.bearing, 
+                                                elevation=data.elevation,
+                                                sigmaRange = sigmaRange,
+                                                sigmaBearing = sigmaBearing,
+                                                sigmaElevation = sigmaElevation)
+ 
         
+        # These are not directly comparable. vt is in map, xyz is in base_link.
+        #print 'vt:', vt.vector.x, vt.vector.y, vt.vector.z, 'xyz', xyz[0][0],xyz[1][0],xyz[2][0]
+
+
+        # Get the transform from base_link to map.        
+        tf_baselink_to_map = taskManager.navigator.tf_buffer.lookup_transform('cora/base_link','map',data.header.stamp, rospy.Duration(1.0))
+        tf_map_to_baselink = taskManager.navigator.tf_buffer.lookup_transform('map','cora/base_link',data.header.stamp, rospy.Duration(1.0))
+
+        
+        #print(tf_baselink_to_map)
+        #print(tf_map_to_baselink)
+        
+        # Extract rpy.
+        rpy = tf.transformations.euler_from_quaternion([tf_baselink_to_map.transform.rotation.x,
+                                                        tf_baselink_to_map.transform.rotation.y,
+                                                        tf_baselink_to_map.transform.rotation.z,
+                                                        tf_baselink_to_map.transform.rotation.w])
+        
+        # Here we have a conundrum. We can get the transform from tf, but tf does not have an uncertainty.
+        # But we do have uncertainty in the odometry message for this transform. But this won't, be 
+        # time-synched in the way that other tf messages are. So for now, under the assumption that the 
+        # uncertainty is not changing quickly, I'm going to use that uncertainty.
+        Crpy_baselink = np.array(taskManager.navigator.odometry.pose.covariance).reshape((6,6))[3:,3:]  # Gets just the roation portion of the covariance. 
+        Cxyz_baselink = np.array(taskManager.navigator.odometry.pose.covariance).reshape((6,6))[:3,:3] # Gets just the position portion of the covariance.
+        
+
+        # NOTE: These two positions are in different reference frames and not directly comparible. 
         #print 'vt:', vt.vector.x, vt.vector.y, vt.vector.z, 'xyz:', xyz[0][0],xyz[1][0],xyz[2][0]
 
+
+        ## CONFUSION!! ##
+        # The map convention is X-East, Y-North. Makes sense. 
+        # The base_link convention is X-Forward, Y-Left. CONFUSING! 
+        # So after the decompose the pinger position measurement from the 
+        # pinger's reference frame into the vehicle's reference frame,
+        # we have to swap coordinates to match the convention of the 'map' frame
+        # before decomposing the coordinates into map coordinates. 
+        xyz = [-xyz[1], xyz[0], xyz[2]]
+        
+
+        xyz, Cxyz = rotate.rotateXYZ_RPH(xyz,Cxyz,np.array(rpy),Crpy_baselink)
+
+        ## WARNING HACK!!! ##
+        # After looking at this for way too long it is still not clear to me
+        # why this is necessary, but one must swap the x,y coordinates to get
+        # the proper result. Not satisfying. But it's working. 
+        xyz = np.array([xyz[1],xyz[0],xyz[2]])
+
+        # Finally add the vehicle's position (which came in the transform message).
+        ## LOOKOUT! One must use the translation data from the map_to_baselink transform,
+        # but NOT the base_link_to_map transform. They are not the same, because in ROS, you 
+        # always translate first, then rotate. So the translation data in the base_link
+        # transform is in the base_link (vessel) reference frame. 
+        
+        xyz = xyz + [[tf_map_to_baselink.transform.translation.x], 
+                        [tf_map_to_baselink.transform.translation.y],
+                        [tf_map_to_baselink.transform.translation.z]]
+        
+        
+        Cxyz = Cxyz + Cxyz_baselink
+        
+        
         if pingerTracker is None:
             initPingerTracker(xyz, Cxyz,isStationary=True)
         else:
-            pinger_filtered = updatePingerFilter((xyz,Cxyz))
-            pinger_filtered_map = tf2_geometry_msgs.do_transform_pose(pinger_filtered.pose, transformation)
-            pinger_location['position_filtered'] = pinger_filtered_map.pose.position
+            pinger_filtered_map = updatePingerFilter((xyz,Cxyz))
+            #pinger_filtered_map = tf2_geometry_msgs.do_transform_pose(pinger_filtered.pose, transformation)
+            pinger_location['position_filtered'] = pinger_filtered_map.pose.pose.position
 
 
     
