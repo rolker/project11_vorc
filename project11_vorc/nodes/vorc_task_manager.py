@@ -112,6 +112,7 @@ class Navigator:
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
         
         self.min_waypoint_distance = 2.0
+        self.plan_expiration = rospy.Duration(1.0)
     
     def odometry_callback(self, data):
         self.odometry = data
@@ -189,15 +190,17 @@ class Navigator:
     def iterate(self):
         self.helm.iterate()
         if self.plan is not None:
+            if rospy.Time()-self.plan.header.stamp > self.plan_expiration:
+                self.make_plan()
             while self.plan_index < len(self.plan.poses) and self.distanceBearingFrom(self.plan.poses[self.plan_index].pose)[0] < self.min_waypoint_distance:
                 self.plan_index += 1
             if self.plan_index >= len(self.plan.poses):
                 self.plan = None
                 self.plan_index = 0
             else:
-                self.helm.set_goal(self.plan.poses[self.plan_index].pose)
+                self.helm.set_goal(self.plan.poses[self.plan_index].pose,self.goal)
         else:
-            self.helm.set_goal(self.goal)
+            self.helm.set_goal(None,self.goal)
 
 class Helm():
     def __init__(self, taskManager):
@@ -220,7 +223,8 @@ class Helm():
     def piloting_mode_callback(self, data):
         self.piloting_mode = data.data
 
-    def set_goal(self, goal):
+    def set_goal(self, step_goal, goal):
+        self.step_goal = step_goal
         self.goal = goal
 
     def do_hover(self, goal):
@@ -241,30 +245,40 @@ class Helm():
         self.dp_feedback = feedback
 
     def publishStatus(self, heartbeat):
+        heartbeat.values.append(KeyValue('helm mode',self.status))
         if self.dp_feedback is not None:
             heartbeat.values.append(KeyValue('dp','range: {:.2f}, yaw err: {:.2f}'.format(self.dp_feedback.range, self.dp_feedback.yawerror)))
         if self.piloting_mode is not None:
             heartbeat.values.append(KeyValue('piloting mode',self.piloting_mode))
 
     def iterate(self):
-        if self.goal is  None:
+        if self.goal is None:
             if self.piloting_mode != 'manual':
                 self.cmd_vel_publisher.publish(Twist())
+            if self.status == 'dp_hover':
+                self.dp_hover_action_client.cancel_goal()
+            self.status = 'idle'
         else:
-            nav = self.taskManager.navigator
-            if nav.odometry is not None:
-                distance, bearing = nav.distanceBearingFrom(self.goal)
-                relative_bearing = nav.yaw - bearing
-                print distance, bearing, relative_bearing
-            
-                speed = max(-self.max_speed,min(self.max_speed,0.1*distance*math.cos(relative_bearing)))
-                print 'speed:',speed
-                yaw_speed = -relative_bearing*0.1 
-                t = Twist()
-                t.linear.x = speed
-                t.angular.z = yaw_speed
-                if self.piloting_mode != 'manual':
-                    self.cmd_vel_publisher.publish(t)
+            if self.step_goal is not None:
+                if self.status == 'dp_hover':
+                    self.dp_hover_action_client.cancel_goal()
+                self.status = 'transit'
+                nav = self.taskManager.navigator
+                if nav.odometry is not None:
+                    distance, bearing = nav.distanceBearingFrom(self.goal)
+                    relative_bearing = nav.yaw - bearing
+                    #print distance, bearing, relative_bearing
+                
+                    speed = max(-self.max_speed,min(self.max_speed,0.1*distance*math.cos(relative_bearing)))
+                    #print 'speed:',speed
+                    yaw_speed = -relative_bearing*0.1 
+                    t = Twist()
+                    t.linear.x = speed
+                    t.angular.z = yaw_speed
+                    if self.piloting_mode != 'manual':
+                        self.cmd_vel_publisher.publish(t)
+            else:
+                self.do_hover(self.goal)
                 
                 
 
