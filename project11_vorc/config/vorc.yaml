@@ -12,6 +12,6 @@
 # task_manger configuration
 /task_manager/pinger/sigmaRange:            3.0
 /task_manager/pinger/sigmaBearing:          0.008
-/task_manager/pinger/sigmaElevation:        0.01
+/task_manager/pinger/sigmaElevation:        0.03
 /task_manager/pinger/tracker_variance:      0.0001
 
