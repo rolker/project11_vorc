@@ -56,10 +56,36 @@ class TaskManager:
         self.task_sub = rospy.Subscriber('/vorc/task/info', Task, self.task_callback)
 
     def task_callback(self, data):
+        ''' Notes for handling task states:
+        
+        Initial:    After Gazebo starts, the task is in the ​initial state. The robot’s motion is fixed in the X (surge), Y (sway) and yaw degrees of freedom, but allowed to move in Z (heave), pitch and roll degrees of freedom. Thus, the robot is pushed up and down by the waves and wind and will change its orientation (except in yaw) but stays in the same 2D position. The purpose of this initial state is to allow for simulation startup transients to decay and for all the user’s software to have sufficient time to initialize.
+
+        Ready:  The task transitions to ​ready when simulation time reaches the value ready_time. In the ​ready state, the robot motion is free in all degrees of freedom and is under the participant’s full control. While in the ready state no scoring is performed.
+
+        Running:    The task transitions to ​running when simulation time reaches the value running_time. In the ​running state, the task officially starts. The scoring and the task timer are enabled.
+
+        Finished:
+        The task transitions to ​finished when the remaining_time field of the task message reaches 0 or when the task is considered complete. If all task time has been consumed, but the task has not been fully solved, the field timed_out of the task message will be set to true. The score will not be updated in this state.
+        '''
+        
         self.task_info = data
+        
         if self.task is None:
-            if self.task_info.name == 'stationkeeping':
-                self.task = StationKeepingTask(self)
+            
+            if self.task_info.state == 'Initial':
+                pass
+            
+            elif self.task_info.state == 'Ready':
+                # Must begin navigating here. Maybe station keep until in Running?
+                
+            elif self.task_info.state == 'Running':
+                # Execute the task.
+            
+                if self.task_info.name == 'stationkeeping':
+                    self.task = StationKeepingTask(self)
+
+            elif self.task_info.state = 'Finished':
+                # All done. No more scoring. Stationkeep???
 
     def iterate(self, event):    
         if self.task is not None:
@@ -631,6 +657,7 @@ pingerTracker = None
 
 pingerPubfiltered = rospy.Publisher('/pinger/map/filtered',PoseWithCovarianceStamped,queue_size=10)
 pingerPub = rospy.Publisher('/pinger/map/raw',PoseWithCovarianceStamped,queue_size=10)
+        
 
 try:
     sigmaRange = rospy.get_param("/task_manager/pinger/sigmaRange")
@@ -745,7 +772,7 @@ def updatePingerFilter(pingerMeasurement):
     pingerPubfiltered.publish(pos)
     
     ## WARNING ##
-    print(pingerTracker)
+    #print(pingerTracker)
     
     return pos
 
@@ -829,7 +856,7 @@ def pinger_callback(data):
         pinger_map = tf2_geometry_msgs.do_transform_pose(pinger, transformation)
         pinger_location['position'] = pinger_map.pose.position
 
-        tf_pinger_to_baselink = tf_buffer.lookup_transform('cora/pinger','cora/base_link',data.header.stamp, rospy.Duration(1.0))
+        tf_pinger_to_baselink = taskManager.navigator.tf_buffer.lookup_transform('cora/pinger','cora/base_link',data.header.stamp, rospy.Duration(1.0))
         #print(tf_pinger_to_baselink)
         
         # Rotation pinger location with uncertainty into base_link.:
@@ -846,8 +873,8 @@ def pinger_callback(data):
 
 
         # Get the transform from base_link to map.        
-        tf_baselink_to_map = tf_buffer.lookup_transform('cora/base_link','map',data.header.stamp, rospy.Duration(1.0))
-        tf_map_to_baselink = tf_buffer.lookup_transform('map','cora/base_link',data.header.stamp, rospy.Duration(1.0))
+        tf_baselink_to_map = taskManager.navigator.tf_buffer.lookup_transform('cora/base_link','map',data.header.stamp, rospy.Duration(1.0))
+        tf_map_to_baselink = taskManager.navigator.tf_buffer.lookup_transform('map','cora/base_link',data.header.stamp, rospy.Duration(1.0))
 
         
         #print(tf_baselink_to_map)
@@ -863,8 +890,8 @@ def pinger_callback(data):
         # But we do have uncertainty in the odometry message for this transform. But this won't, be 
         # time-synched in the way that other tf messages are. So for now, under the assumption that the 
         # uncertainty is not changing quickly, I'm going to use that uncertainty.
-        Crpy_baselink = np.array(odometry.pose.covariance).reshape((6,6))[3:,3:]  # Gets just the roation portion of the covariance. 
-        Cxyz_baselink = np.array(odometry.pose.covariance).reshape((6,6))[:3,:3] # Gets just the position portion of the covariance.
+        Crpy_baselink = np.array(taskManager.navigator.odometry.pose.covariance).reshape((6,6))[3:,3:]  # Gets just the roation portion of the covariance. 
+        Cxyz_baselink = np.array(taskManager.navigator.odometry.pose.covariance).reshape((6,6))[:3,:3] # Gets just the position portion of the covariance.
         
 
         # NOTE: These two positions are in different reference frames and not directly comparible. 
