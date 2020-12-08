@@ -48,15 +48,15 @@ class TaskManager:
         self.navigator = Navigator(self)
         self.camp = Camp(self)
         self.lookout = Lookout(self)
-        self.pinger = SonarGuy(self)
         
         self.task_sub = rospy.Subscriber('/vorc/task/info', Task, self.task_callback)
 
     def task_callback(self, data):
         self.task_info = data
         if self.task is None:
-            if self.task_info.name == 'stationkeeping':
-                self.task = StationKeepingTask(self)
+            if self.task_info.state != 'inital': #wait until we're out of initial to make sure all nodes are done loading and stuff
+                if self.task_info.name == 'stationkeeping':
+                    self.task = StationKeepingTask(self)
 
     def iterate(self, event):    
         if self.task is not None:
@@ -64,7 +64,6 @@ class TaskManager:
         self.navigator.iterate()
         self.camp.iterate()
         self.lookout.iterate()
-        self.pinger.iterate()
 
     def publishStatus(self, heartbeat):
 
@@ -219,7 +218,7 @@ class Helm():
         self.dp_feedback = None
         self.goal = None
         
-        self.max_speed = 15
+        self.max_speed = 5
 
 
     def piloting_mode_callback(self, data):
@@ -267,20 +266,23 @@ class Helm():
                 self.status = 'transit'
                 nav = self.taskManager.navigator
                 if nav.odometry is not None:
-                    distance, bearing = nav.distanceBearingFrom(self.goal)
+                    distance, bearing = nav.distanceBearingFrom(self.step_goal)
+                    overall_distance = nav.distanceBearingFrom(self.goal)[0]
                     relative_bearing = nav.yaw - bearing
                     #print distance, bearing, relative_bearing
                 
-                    speed = max(-self.max_speed,min(self.max_speed,0.1*distance*math.cos(relative_bearing)))
+                    speed = max(-self.max_speed,min(self.max_speed,0.5*overall_distance))*math.cos(relative_bearing)
+                    speed = max(0,speed) #don't try reverse if transiting
                     #print 'speed:',speed
-                    yaw_speed = -relative_bearing*0.1 
+                    yaw_speed = -relative_bearing*0.25 
                     t = Twist()
                     t.linear.x = speed
                     t.angular.z = yaw_speed
                     if self.piloting_mode != 'manual':
                         self.cmd_vel_publisher.publish(t)
             else:
-                self.do_hover(self.goal)
+                if self.status != 'dp_hover':
+                    self.do_hover(self.goal)
                 
                 
 
@@ -600,9 +602,11 @@ class GymkhanaTask():
     def __init__(self, taskManger):
         self.taskManager = taskManger
         self.status = 'find starting gate'
+        self.pinger = SonarGuy(self)
+
 
     def iterate(self):
-        
+        self.pinger.iterate()
         if taskManager.status == 'idle' and pinger_location is not None and 'position_filtered' in pinger_location:
             goal = Pose()
             goal.position = pinger_location['position_filtered']
@@ -618,6 +622,7 @@ class GymkhanaTask():
 class SonarGuy():
     def __init__(self, taskManager):
         self.taskManager = taskManager
+        self.pinger_sub = rospy.Subscriber('/cora/sensors/pingers/pinger/range_bearing', RangeBearing, pinger_callback) 
 
     def iterate(self):
         if pinger_location is not None:
@@ -738,6 +743,7 @@ def updatePingerFilter(pingerMeasurement):
 
 def pinger_callback(data):
     global pinger_location
+    print 'ping!'
     
     if pinger_location is None:
         pinger_location = {}
@@ -788,8 +794,8 @@ def pinger_callback(data):
 
 
     
-
-rospy.Subscriber('/cora/sensors/pingers/pinger/range_bearing', RangeBearing, pinger_callback)
+# moved to SonarGuy
+#rospy.Subscriber('/cora/sensors/pingers/pinger/range_bearing', RangeBearing, pinger_callback) 
 
 #
 # Let 'r rip!
