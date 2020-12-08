@@ -159,9 +159,10 @@ class Navigator:
             r.map_point.x = x
             r.map_point.y = y
             r.map_point.z = z
-            return self.toll_service(r).ll_point
-            print("Service call failed: %s"%e)
-        except rospy.ServiceException as e:
+            ret = self.toll_service(r)
+            if ret is not None:
+                return ret.ll_point
+        except Exception as e:
             print("Service call failed: %s"%e)
 
     def publishStatus(self, heartbeat):
@@ -358,26 +359,27 @@ class Camp():
         pgroup.size = 3.0
 
         ll = self.taskManager.navigator.toLL(pinger.x,pinger.y,pinger.z)
-        gp = GeoPoint()
-        gp.latitude = ll.latitude
-        gp.longitude = ll.longitude
-        pgroup.points.append(gp)
-        vizItem.point_groups.append(pgroup)
-        
-        plist = GeoVizPointList()
-        plist.color.r = 0.6
-        if 'filtered' in label:
-            plist.color.r = 0.9
-        plist.color.g = 0.7
-        plist.color.b = 0.8
-        plist.color.a = 1.0
-        plist.size = 3.0
-        for deltas in ( (-0.0002,0), (0,+0.0003), (+0.0002,0), (0,-0.0003), (-0.0002,0)):
+        if ll is not None:
             gp = GeoPoint()
-            gp.latitude = ll.latitude+deltas[0]
-            gp.longitude = ll.longitude+deltas[1]
-            plist.points.append(gp)
-        vizItem.lines.append(plist)
+            gp.latitude = ll.latitude
+            gp.longitude = ll.longitude
+            pgroup.points.append(gp)
+            vizItem.point_groups.append(pgroup)
+        
+            plist = GeoVizPointList()
+            plist.color.r = 0.6
+            if 'filtered' in label:
+                plist.color.r = 0.9
+            plist.color.g = 0.7
+            plist.color.b = 0.8
+            plist.color.a = 1.0
+            plist.size = 3.0
+            for deltas in ( (-0.0002,0), (0,+0.0003), (+0.0002,0), (0,-0.0003), (-0.0002,0)):
+                gp = GeoPoint()
+                gp.latitude = ll.latitude+deltas[0]
+                gp.longitude = ll.longitude+deltas[1]
+                plist.points.append(gp)
+            vizItem.lines.append(plist)
         
         self.display_publisher.publish(vizItem)
 
@@ -392,10 +394,11 @@ class Camp():
         plist.size = 5
         for p in plan.poses:
             ll = self.taskManager.navigator.toLL(p.pose.position.x,p.pose.position.y,p.pose.position.z)
-            gp = GeoPoint()
-            gp.latitude = ll.latitude
-            gp.longitude = ll.longitude
-            plist.points.append(gp)
+            if ll is not None:
+                gp = GeoPoint()
+                gp.latitude = ll.latitude
+                gp.longitude = ll.longitude
+                plist.points.append(gp)
         vizItem.lines.append(plist)
         self.display_publisher.publish(vizItem)
             
