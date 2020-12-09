@@ -23,7 +23,7 @@
     
     <include file="$(find project11_vorc)/launch/navigation.launch"/>
     
-    <include if="$(arg perception)" file="$(find project11_vorc)/launch/perception.launch"/>
+    <include if="$(arg perception)" file="$(find project11_vorc)/launch/darknet.launch"/>
     
     <node pkg="project11_vorc" type="vorc_task_manager.py" name="task_manager"/>
 

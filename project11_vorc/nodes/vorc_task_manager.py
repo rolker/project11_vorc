@@ -62,6 +62,8 @@ class TaskManager:
                     self.task = StationKeepingTask(self)
                 if self.task_info.name == 'wayfinding':
                     self.task = WayfindingTask(self)
+                if self.task_info.name == 'perception':
+                    self.task = PerceptionTask(self)
 
     def iterate(self, event):    
         if self.task is not None:
@@ -400,7 +402,7 @@ class Camp():
             plist.color.a = 1.0
             for corner in target['corners']:
                 if corner is not None:
-                    ll = navigator.toLL(corner[0],corner[1],corner[2])
+                    ll = self.taskManager.navigator.toLL(corner[0],corner[1],corner[2])
                     gp = GeoPoint()
                     gp.latitude = ll.latitude
                     gp.longitude = ll.longitude
@@ -414,7 +416,7 @@ class Camp():
             pgroup.color.a = 1.0
             pgroup.size = 3.0
 
-            ll = navigator.toLL(target['position'][0],target['position'][1],target['position'][2])
+            ll = self.taskManager.navigator.toLL(target['position'][0],target['position'][1],target['position'][2])
             gp = GeoPoint()
             gp.latitude = ll.latitude
             gp.longitude = ll.longitude
@@ -491,7 +493,6 @@ class Lookout():
     def __init__(self, taskManager):
         self.taskManager = taskManager
         self.left_camera_model = None
-        self.detected_targets = None
 
         self.left_camera_info_sub = rospy.Subscriber('/cora/sensors/cameras/front_left_camera/camera_info', CameraInfo, self.camera_info_callback)
         self.detects_sub = rospy.Subscriber('/darknet_ros/bounding_boxes', BoundingBoxes, self.darknet_detects_callback)
@@ -504,8 +505,6 @@ class Lookout():
 
 
     def darknet_detects_callback(self, data):
-        global detected_targets
-        
         detected_targets = []
         try:
             transformation = self.taskManager.navigator.tf_buffer.lookup_transform('map', data.image_header.frame_id, data.image_header.stamp, rospy.Duration(1.0))
@@ -525,11 +524,11 @@ class Lookout():
 
             for bb in data.bounding_boxes:
                 target = {'class':bb.Class, 'probability':bb.probability, 'corners':[], 'timestamp':data.image_header.stamp}
-                if left_camera_model is not None:
+                if self.left_camera_model is not None:
                     for corner in ((bb.xmax,bb.ymax),(bb.xmax,bb.ymin),(bb.xmin,bb.ymin),(bb.xmin,bb.ymax), (bb.xmin+(bb.xmax-bb.xmin)/2.0,bb.ymax)): #quick hack, last is bottom middle used as position
-                        corner_rectified = left_camera_model.rectifyPoint(corner)
+                        corner_rectified = self.left_camera_model.rectifyPoint(corner)
                         if corner_rectified is not None:
-                            corner_ray = left_camera_model.projectPixelTo3dRay(corner_rectified)
+                            corner_ray = self.left_camera_model.projectPixelTo3dRay(corner_rectified)
                         
                             rospy.logdebug("pixel ray: {}".format(str(corner_ray)))
                                 
@@ -553,10 +552,12 @@ class Lookout():
                         else:
                             target['position'] = P
                 detected_targets.append(target)
+        self.taskManager.camp.markTargets(detected_targets)
+        if self.taskManager.task is not None:
+            self.taskManager.task.targets_detected(detected_targets)
                 
     def iterate(self):
-        if self.detected_targets is not None:
-            self.taskManager.camp.markTargets(self.detected_targets)
+        pass
                         
 
 #
@@ -599,6 +600,8 @@ class StationKeepingTask():
     def iterate(self):
         pass
 
+    def targets_detected(self, detected_targets):
+        pass
 
 #
 # Task 2 - Wayfinding
@@ -676,32 +679,123 @@ class WayfindingTask():
                 if rospy.Time.now() - self.reached_current_waypoint_time >= self.waypoint_dwell_time:
                     self.pickNextWaypoint()
 
+    def targets_detected(self, detected_targets):
+        pass
+
 #
 # Task 3 - Landmark Localization and Characterization (perception)
 #
 class PerceptionTask():
     def __init__(self, taskManager):
         self.taskManager = taskManager
-        self.perception_landmark_publisher = rospy.Publisher('/vorc/perception/landmark', GeoPoseStamped, queue_size=10)
-        self.perception_last_sent_timestamp = rospy.Time()
+        self.landmark_publisher = rospy.Publisher('/vorc/perception/landmark', GeoPoseStamped, queue_size=10)
+        self.last_sent_timestamp = rospy.Time()
         self.yaw_control = False
+        self.status = 'waiting'
+        
+        self.targets_buffer = None
+        self.targets_buffer_start_time = None
+        self.last_detect_time = None
 
     def send_detects(self):
-        if detected_targets is not None:
-            for target in detected_targets:
-                if target['timestamp'] > perception_last_sent_timestamp:
-                    landmark = GeoPoseStamped()
-                    landmark.header.frame_id = target['class']
-                    landmark.header.stamp = target['timestamp']
-                    ll = navigator.toLL(target['position'][0],target['position'][1],target['position'][2])
-                    landmark.pose.position.latitude = ll.latitude
-                    landmark.pose.position.longitude = ll.longitude
-                    perception_landmark_publisher.publish(landmark)
-            if len(detected_targets):
-                self.perception_last_sent_timestamp = detected_targets[0]['timestamp']
+        if self.targets_buffer is not None:
+            for target in self.targets_buffer:
+                landmark = GeoPoseStamped()
+                landmark.header.frame_id = target.bestClass()
+                landmark.header.stamp = rospy.Time.now()
+                ll = self.taskManager.navigator.toLL(target.x,target.y,0)
+                landmark.pose.position.latitude = ll.latitude
+                landmark.pose.position.longitude = ll.longitude
+                self.landmark_publisher.publish(landmark)
+        self.status = 'reported'
                 
     def iterate(self):
-        self.send_detects()
+        if self.status == 'accumulating':
+            # accumulate for 3 seconds, to make sure we report within the 5 secd trial time
+            if rospy.Time.now() - self.targets_buffer_start_time > rospy.Duration(3): 
+                self.send_detects()
+        if self.last_detect_time is not None and rospy.Time.now() - self.last_detect_time > rospy.Duration(1):
+            self.targets_buffer = None
+            self.targets_buffer_start_time = None
+            self.status = 'waiting'
+
+    def targets_detected(self, detected_targets):
+        if self.targets_buffer is None:
+            self.targets_buffer = []
+            self.targets_buffer_start_time = rospy.Time.now()
+            self.status = 'accumulating'
+            for t in detected_targets:
+                pt = PerceptionTarget()
+                pt.addDetection(t)
+                self.targets_buffer.append(pt)
+        else:
+            for t in detected_targets:
+                if len(self.targets_buffer):
+                    min_index = 0
+                    min_distance = self.targets_buffer[0].distanceSquared(t)
+                    for i in range(len(self.targets_buffer)):
+                        d = self.targets_buffer[i].distanceSquared(t)
+                        if d < min_distance:
+                            min_distance = d
+                            min_index = i
+                    if min_distance < 5:
+                        self.targets_buffer[min_index].addDetection(t)
+                    else:
+                        pt = PerceptionTarget()
+                        pt.addDetection(t)
+                        self.targets_buffer.append(pt)
+                else:
+                    pt = PerceptionTarget()
+                    pt.addDetection(t)
+                    self.targets_buffer.append(pt)
+
+        self.last_detect_time = rospy.Time.now()
+        
+        
+        
+
+    def publishStatus(self, heartbeat):
+        heartbeat.values.append(KeyValue('perception status',self.status))
+
+class PerceptionTarget():
+    def __init__(self):
+        self.classes = {}
+        self.positions = []
+
+    def addDetection(self, t):
+        self.positions.append(t['position'])
+        self.x = 0.0
+        self.y = 0.0
+        for p in self.positions:
+            self.x += p[0]
+            self.y += p[1]
+        self.x /= float(len(self.positions))
+        self.y /= float(len(self.positions))
+        
+        if not t['class'] in self.classes:
+            self.classes[t['class']] = []
+        self.classes[t['class']].append(t['probability'])
+
+    def distanceSquared(self, t):
+        dx = t['position'][0]-self.x
+        dy = t['position'][1]-self.y
+        return dx*dx+dy*dy
+
+    def bestClass(self):
+        ret = ''
+        ret_score = 0
+        for c,probs in self.classes.iteritems():
+            p_sum = 0
+            for p in probs:
+                p_sum += p
+            prob = p_sum/float(len(self.positions))
+            if prob > ret_score:
+                ret_score = prob
+                ret = c
+        print ret, ret_score
+        return ret
+        
+        
 
 #
 # Task 4 - Black box search (gymkhana)
@@ -726,6 +820,9 @@ class GymkhanaTask():
 
     def publishStatus(self, heartbeat):
         heartbeat.values.append(KeyValue('gymkhana status',self.status))
+
+    def targets_detected(self, detected_targets):
+        pass
 
 # crew member listening for the pinger
 class SonarGuy():
