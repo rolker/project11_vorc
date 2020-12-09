@@ -88,7 +88,7 @@ class ProximitySensor():
                 #print("closest")
             
                 #for idx in closestIndexes[0:1]:
-                    print(d[mask][idx])
+                #    print(d[mask][idx])
                     
             # For debugging.    
             if self.plotonce:
