@@ -1,0 +1,179 @@
+<?xml version="1.0" ?>
+<!-- World containing marina model and some course challenges -->
+<sdf version="1.6" xmlns:xacro="http://ros.org/wiki/xacro">
+  <world name="perception_task_example">
+    <xacro:include filename="$(find vorc_gazebo)/worlds/marina.xacro" />
+    <xacro:marina />
+
+    <!--Waves-->
+    <xacro:include filename="$(find wave_gazebo)/world_models/ocean_waves/model.xacro"/>
+    <xacro:ocean_waves scale="2.6"/>
+
+    <!-- Include all the objects we plan to use for perception.
+       Stash them out of the field of view for now -->
+    <include>
+      <name>red_0</name>
+      <pose>400 -600 1 0 0 0</pose>
+      <uri>model://surmark950410</uri>
+    </include>
+
+    <include>
+      <name>green_0</name>
+      <pose>400 -598 1 0 0 0</pose>
+      <uri>model://surmark950400</uri>
+    </include>
+
+    <include>
+      <name>black_0</name>
+      <pose>400 -596 1 0 0 0</pose>
+      <uri>model://black_totem</uri>
+    </include>
+
+    <include>
+      <name>white_0</name>
+      <pose>400 -594 1 0 0 0</pose>
+      <uri>model://surmark46104</uri>
+    </include>
+
+    <include>
+      <name>p_7</name>
+      <pose>400 -592 1 0 0 0</pose>
+      <uri>model://polyform_a7</uri>
+    </include>
+
+    <include>
+      <name>p_5</name>
+      <pose>400 -590 1 0 0 0</pose>
+      <uri>model://polyform_a5</uri>
+    </include>
+
+    <include>
+      <name>p_3</name>
+      <pose>400 -588 1 0 0 0</pose>
+      <uri>model://polyform_a3</uri>
+    </include>
+
+    <include>
+      <name>yellow_t</name>
+      <pose>400 -586 1 0 0 0</pose>
+      <uri>model://yellow_totem</uri>
+    </include>
+
+    <include>
+      <name>blue_t</name>
+      <pose>400 -584 1 0 0 0</pose>
+      <uri>model://blue_totem</uri>
+    </include>
+
+    <include>
+      <name>green_t</name>
+      <pose>400 -582 1 0 0 0</pose>
+      <uri>model://green_totem</uri>
+    </include>
+
+    <include>
+      <name>red_t</name>
+      <pose>400 -580 1 0 0 0</pose>
+      <uri>model://red_totem</uri>
+    </include>
+
+    <include>
+      <name>b_red</name>
+      <pose>400 -578 1 0 0 0</pose>
+      <uri>model://buoy_red</uri>
+    </include>
+    
+    <plugin filename="libperception_scoring_plugin.so"
+            name="perception_scoring_plugin">
+      <!-- Parameters for ScoringPlugin base class -->
+      <vehicle>cora</vehicle>
+      <task_name>perception</task_name>
+      <initial_state_duration>10.0</initial_state_duration>
+      <ready_state_duration>10.0</ready_state_duration>
+      <running_state_duration>300</running_state_duration>
+      <task_info_topic>/vorc/task/info</task_info_topic>
+      <contact_debug_topic>/vorc/debug/contact</contact_debug_topic>
+      <landmark_topic>/vorc/perception/landmark</landmark_topic>
+      <!-- Parameters for PopulationPlugin -->
+      <loop_forever>true</loop_forever>
+      <frame>cora</frame>
+      <!-- Pose of each object is expressed relative to the body frame
+           of the object named in the frame field - i.e., relative to
+           the vessel -->
+      <object_sequence>
+        <object>
+          <time>5</time>
+          <type>surmark950410</type>
+          <name>red_0</name>
+          <pose>15 0 1 0 0 0</pose>
+        </object>
+        <object>
+          <time>5</time>
+          <type>surmark950400</type>
+          <name>green_0</name>
+          <pose>15 2 1 0 0 0</pose>
+        </object>
+        <object>
+          <time>15.0</time>
+          <type>black_totem</type>
+          <name>black_0</name>
+          <pose>15 -2 1 0 0 0</pose>
+        </object>
+        <object>
+          <time>15.0</time>
+          <type>surmark46104</type>
+          <name>white_0</name>
+          <pose>17 -1 1 0 0 0</pose>
+        </object>
+        <object>
+          <time>15.0</time>
+          <type>polyform_a7</type>
+          <name>p_7</name>
+          <pose>16 3 1 0 0 0</pose>
+        </object>
+        <object>
+          <time>15.0</time>
+          <type>polyform_a5</type>
+          <name>p_5</name>
+          <pose>12 -3 1 0 0 0</pose>
+        </object>
+        <object>
+          <time>15.0</time>
+          <type>polyform_a3</type>
+          <name>p_3</name>
+          <pose>15 4 1 0 0 0</pose>
+        </object>
+        <object>
+          <time>25.0</time>
+          <type>yellow_totem</type>
+          <name>yellow_t</name>
+          <pose>15 0 1 0 0 0</pose>
+        </object>
+        <object>
+          <time>25.0</time>
+          <type>blue_totem</type>
+          <name>blue_t</name>
+          <pose>15 3 1 0 0 0</pose>
+        </object>
+        <object>
+          <time>25.0</time>
+          <type>green_totem</type>
+          <name>green_t</name>
+          <pose>18 -1 1 0 0 0</pose>
+        </object>
+        <object>
+          <time>35</time>
+          <type>red_totem</type>
+          <name>red_t</name>
+          <pose>15 0 1 0 0 0</pose>
+        </object>
+        <object>
+          <time>35</time>
+          <type>buoy_red</type>
+          <name>b_red</name>
+          <pose>15 2 1 0 0 0</pose>
+        </object>
+      </object_sequence>
+    </plugin>
+  </world>
+</sdf>

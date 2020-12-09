@@ -792,7 +792,7 @@ class PerceptionTarget():
             if prob > ret_score:
                 ret_score = prob
                 ret = c
-        print ret, ret_score
+        print ret, ret_score, self.x, self.y
         return ret
         
         
