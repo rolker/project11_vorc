@@ -5,13 +5,17 @@
     <arg name="perception" default="true" />
     <arg name="rqt" default="false"/>
     <arg name="camp" default="true" />
+    <arg name="simpler" default="false"/>
 
     <include file="$(find project11_vorc)/launch/localization.launch"/>
     
     
     <node pkg="cora_helm" type="cora_helm_node.py" name="cora_helm"/>
 
-    <node pkg="cora_helm" type="simple_differential_controller.py" name="simple_controller">
+    <node unless="$(arg simpler)" pkg="cora_helm" type="simple_differential_controller.py" name="simple_controller">
+        <remap from="odom" to="/cora/robot_localization/odometry/filtered"/>
+    </node>
+    <node if="$(arg simpler)" pkg="cora_helm" type="simpler_differential_controller.py" name="simpler_controller">
         <remap from="odom" to="/cora/robot_localization/odometry/filtered"/>
     </node>
 

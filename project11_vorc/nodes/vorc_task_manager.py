@@ -17,8 +17,7 @@ from std_msgs.msg import Float64, Float64MultiArray, String
 from geographic_msgs.msg import GeoPoseStamped, GeoPoint, GeoPath
 from geometry_msgs.msg import PoseStamped, Twist, TransformStamped, Vector3Stamped
 from geometry_msgs.msg import PoseWithCovarianceStamped, Pose
-from marine_msgs.msg import Heartbeat
-from marine_msgs.msg import KeyValue
+from marine_msgs.msg import Heartbeat, KeyValue, DifferentialDrive
 from geographic_visualization_msgs.msg import GeoVizItem, GeoVizPointList
 from nav_msgs.msg import Odometry
 from darknet_ros_msgs.msg import BoundingBoxes
@@ -61,6 +60,8 @@ class TaskManager:
             if self.task_info.state != 'inital': #wait until we're out of initial to make sure all nodes are done loading and stuff
                 if self.task_info.name == 'stationkeeping':
                     self.task = StationKeepingTask(self)
+                if self.task_info.name == 'wayfinding':
+                    self.task = WayfindingTask(self)
 
     def iterate(self, event):    
         if self.task is not None:
@@ -72,8 +73,7 @@ class TaskManager:
     def publishStatus(self, heartbeat):
 
         if self.task_info is not None:
-            heartbeat.values.append(KeyValue('task',self.task_info.name))
-            heartbeat.values.append(KeyValue('state',self.task_info.state))
+            heartbeat.values.append(KeyValue('task',self.task_info.name+' - '+self.task_info.state))
             heartbeat.values.append(KeyValue('time','elapsed: {0}, remaining: {1}'.format(self.task_info.elapsed_time.secs,self.task_info.remaining_time.secs)))
             heartbeat.values.append(KeyValue('score','{:.3g}'.format(self.task_info.score)))
             
@@ -94,15 +94,16 @@ class Navigator:
         self.odometry = None
         self.pose = None
         self.cmd_vel = None
+        self.differential_drive = None
 
         self.goal = None
         self.plan = None
-        self.plan_index = 0
         
         self.helm = Helm(taskManager)
         
         rospy.Subscriber('/cora/robot_localization/odometry/filtered', Odometry, self.odometry_callback)
         rospy.Subscriber('/cmd_vel', Twist, self.cmd_vel_callback)
+        rospy.Subscriber('/differential_drive', DifferentialDrive, self.differential_drive_callback)
 
         rospy.wait_for_service('/move_base/make_plan')
         rospy.wait_for_service('/cora/robot_localization/fromLL')
@@ -117,6 +118,7 @@ class Navigator:
         
         self.min_waypoint_distance = 2.0
         self.plan_expiration = rospy.Duration(1.0)
+        self.hover_radius = 3.5
     
     def odometry_callback(self, data):
         self.odometry = data
@@ -127,6 +129,9 @@ class Navigator:
     def cmd_vel_callback(self, data):
         self.cmd_vel = data
 
+    def differential_drive_callback(self, data):
+        self.differential_drive = data
+
     def set_goal(self, goal):
         self.goal = goal
         self.make_plan()
@@ -134,7 +139,6 @@ class Navigator:
     def make_plan(self):
         if self.goal is None:
             self.plan = None
-            self.plan_index = 0
         elif self.odometry is not None:
             rospy.logdebug('planning...')
             try:
@@ -145,7 +149,6 @@ class Navigator:
                 r.start.pose = self.odometry.pose.pose
                 self.plan = self.make_plan_service(r).plan
                 self.plan.header.stamp = rospy.Time.now()
-                self.plan_index = 0
                 self.taskManager.camp.showPlan(self.plan)
             except rospy.ServiceException as e:
                 print("Make plan service call failed: %s"%e)
@@ -179,6 +182,8 @@ class Navigator:
             
         if self.cmd_vel is not None:
             heartbeat.values.append(KeyValue('cmd_vel','{:.2f}, {:.1f} yaw: {:.2f}'.format(self.cmd_vel.linear.x, self.cmd_vel.linear.y, self.cmd_vel.angular.z)))
+        if self.differential_drive is not None:
+            heartbeat.values.append(KeyValue('diff drive','l: {:.2f}, r: {:.2f}'.format(self.differential_drive.left_thrust, self.differential_drive.right_thrust)))
 
         heartbeat.values.append(KeyValue('---','---'))
         self.helm.publishStatus(heartbeat)
@@ -191,21 +196,42 @@ class Navigator:
             distance = math.sqrt(dx*dx+dy*dy)
             bearing = math.atan2(dy,dx)
             return (distance, bearing)
+
+    def estimated_stop_distance(self):
+        if self.odometry is not None:
+            speed = self.odometry.twist.twist.linear.x
+            stop_time = speed/self.helm.max_acceleration
+            distance = stop_time*speed/2.0
+            return distance
+
+    def find_closest_from_plan(self):
+        if self.plan is not None and len(self.plan.poses) > 0:
+            ret = 0
+            min_distance = None
+            for i in range(len(self.plan.poses)):
+                d = self.distanceBearingFrom(self.plan.poses[i].pose)[0]
+                if min_distance is None or d < min_distance:
+                    ret = i
+                    min_distance = d
+            return self.plan.poses[ret].pose
+                
         
     def iterate(self):
         self.helm.iterate()
         if self.plan is not None:
             if rospy.Time.now()-self.plan.header.stamp > self.plan_expiration:
                 self.make_plan()
-            while self.plan_index < len(self.plan.poses) and self.distanceBearingFrom(self.plan.poses[self.plan_index].pose)[0] < self.min_waypoint_distance:
-                self.plan_index += 1
-            if self.plan_index >= len(self.plan.poses):
-                self.plan = None
-                self.plan_index = 0
-            else:
-                self.helm.set_goal(self.plan.poses[self.plan_index].pose,self.goal)
+            closest = self.find_closest_from_plan()
+            if closest is not None:
+                self.helm.set_goal(closest,self.goal)
         else:
-            self.helm.set_goal(None,self.goal)
+            if self.goal is not None:
+                #do we need a plan?
+                distance = self.distanceBearingFrom(self.goal)[0]
+                if distance > self.hover_radius:
+                    self.make_plan()
+            if self.plan is None: #if we still don't have a plan, do hover
+                self.helm.set_goal(None,self.goal)
 
 class Helm():
     def __init__(self, taskManager):
@@ -222,7 +248,10 @@ class Helm():
         self.dp_feedback = None
         self.goal = None
         
-        self.max_speed = 5
+        self.max_speed = 15
+        self.max_acceleration = 2.5
+        
+        self.uturn_direction = None
 
 
     def piloting_mode_callback(self, data):
@@ -237,6 +266,10 @@ class Helm():
         hg.target.header.frame_id = 'map'
         hg.target.header.stamp = rospy.get_rostime()
         hg.target.pose = goal
+        yaw_control = False
+        if self.taskManager.task is not None:
+            yaw_control = self.taskManager.task.yaw_control
+        hg.yaw_control = yaw_control
         
         self.dp_hover_action_client.wait_for_server()
         self.dp_hover_action_client.send_goal(hg,self.dp_hover_done_callback, None, self.dp_hover_feedback_callback)
@@ -251,8 +284,11 @@ class Helm():
 
     def publishStatus(self, heartbeat):
         heartbeat.values.append(KeyValue('helm mode',self.status))
-        if self.dp_feedback is not None:
+        if self.dp_feedback is not None and self.status == 'dp_hover':
             heartbeat.values.append(KeyValue('dp','range: {:.2f}, yaw err: {:.2f}'.format(self.dp_feedback.range, self.dp_feedback.yawerror)))
+        if self.goal is not None:
+            distance = self.taskManager.navigator.distanceBearingFrom(self.goal)[0]
+            heartbeat.values.append(KeyValue('goal distance',str(distance)))
         if self.piloting_mode is not None:
             heartbeat.values.append(KeyValue('piloting mode',self.piloting_mode))
 
@@ -270,15 +306,44 @@ class Helm():
                 self.status = 'transit'
                 nav = self.taskManager.navigator
                 if nav.odometry is not None:
-                    distance, bearing = nav.distanceBearingFrom(self.step_goal)
+                    #distance, bearing = nav.distanceBearingFrom(self.step_goal)
+                    o =  self.step_goal.orientation
+                    suggested_yaw = tf.transformations.euler_from_quaternion([o.x, o.y, o.z,o.w])[2]
+                    relative_bearing = suggested_yaw - nav.yaw
+
+                    if relative_bearing < -math.pi:
+                        relative_bearing += 2*math.pi
+                    if relative_bearing > math.pi:
+                        relative_bearing -= 2*math.pi
+                    
                     overall_distance = nav.distanceBearingFrom(self.goal)[0]
-                    relative_bearing = nav.yaw - bearing
-                    #print distance, bearing, relative_bearing
-                
-                    speed = max(-self.max_speed,min(self.max_speed,0.5*overall_distance))*math.cos(relative_bearing)
+
+                    # to prevent oscilations when needing to turn around and can't decide which way...
+                    if relative_bearing < -math.pi/2.0 or relative_bearing > math.pi/2.0:
+                        print 'behind us!'
+                        if self.uturn_direction is None:
+                            if relative_bearing > 0:
+                                self.uturn_direction = 'left'
+                            else:
+                                self.uturn_direction = 'right'
+                        if self.uturn_direction == 'left':
+                            yaw_speed = .3
+                        else:
+                            yaw_speed = -.3
+                    else:
+                        yaw_speed = relative_bearing*0.75 
+                        self.uturn_direction = None
+                    
+                    slow_down_because_of_turning_factor = 1.0-abs(relative_bearing)/math.pi
+                    if abs(relative_bearing) > math.pi/4.0: # slow down even more if turning more than 45 degs
+                        slow_down_because_of_turning_factor = 0.0
+                    speed = max(-self.max_speed,min(self.max_speed,0.2*overall_distance))*slow_down_because_of_turning_factor
                     speed = max(0,speed) #don't try reverse if transiting
-                    #print 'speed:',speed
-                    yaw_speed = -relative_bearing*0.25 
+                    
+                    if overall_distance < 25: # slow down more if getting close
+                        speed *= 0.5
+                    
+                    print 'sugg yaw:', suggested_yaw, 'relative:', relative_bearing, 'speed:', speed, 'yaw rate:', yaw_speed
                     t = Twist()
                     t.linear.x = speed
                     t.angular.z = yaw_speed
@@ -503,6 +568,7 @@ class StationKeepingTask():
         self.goal = None
         self.pose_error = None
         self.rms_error = None
+        self.yaw_control = True
         
         self.goal_sub = rospy.Subscriber('/vorc/station_keeping/goal', GeoPoseStamped, self.goal_callback)
         self.pose_error_sub = rospy.Subscriber('/vorc/station_keeping/pose_error', Float64, self.pose_error_callback)
@@ -537,41 +603,78 @@ class StationKeepingTask():
 #
 # Task 2 - Wayfinding
 #
-class Wayfinding():
+class WayfindingTask():
     def __init__(self, taskManager):
         self.taskManager = taskManager
-        self.wayfinding_waypoints = None
-        self.wayfinding_min_errors = None
-        self.wayfinding_mean_error = None
-        self.wayfinding_current_waypoint = None
+        self.waypoints = None
+        self.min_errors = None
+        self.mean_error = None
+        self.current_waypoint = None
+        self.reached_current_waypoint_time = None
+        self.distance_considered_reached = 5
+        self.waypoint_dwell_time = rospy.Duration(10)
+        self.status = 'idle'
+        self.yaw_control = True
 
-        self.waypoints_sub = rospy.Subscriber('/vorc/wayfinding/waypoints', GeoPath, self.wayfinding_waypoints_callback)
-        self.min_error_sub = rospy.Subscriber('/vorc/wayfinding/min_errors', Float64MultiArray, self.wayfinding_min_errors_callback)
-        self.min_error_sub = rospy.Subscriber('/vorc/wayfinding/mean_errors', Float64, self.wayfinding_mean_error_callback)
+        self.waypoints_sub = rospy.Subscriber('/vorc/wayfinding/waypoints', GeoPath, self.waypoints_callback)
+        self.min_error_sub = rospy.Subscriber('/vorc/wayfinding/min_errors', Float64MultiArray, self.min_errors_callback)
+        self.min_error_sub = rospy.Subscriber('/vorc/wayfinding/mean_errors', Float64, self.mean_error_callback)
 
-    def wayfinding_waypoints_callback(self, data):
-        self.wayfinding_waypoints = []
+    def waypoints_callback(self, data):
+        self.waypoints = []
         for i in range(len(data.poses)):
-            markWaypoint(data.poses[i].pose.position, 'waypoint_'+str(i))
-            self.wayfinding_waypoints.append({'position':navigator.fromLL(data.poses[i].pose.position.latitude, data.poses[i].pose.position.longitude, data.poses[i].pose.position.altitude), 'orientation':data.poses[i].pose.orientation})
+            self.taskManager.camp.markWaypoint(data.poses[i].pose.position, 'waypoint_'+str(i))
+            p = Pose();
+            p.position = self.taskManager.navigator.fromLL(data.poses[i].pose.position.latitude, data.poses[i].pose.position.longitude, data.poses[i].pose.position.altitude)
+            p.orientation = data.poses[i].pose.orientation
+            self.waypoints.append(p)
+        if len(self.waypoints) == 0:
+            self.current_waypoint = None
 
-
-    def wayfinding_min_errors_callback(self, data):
-        self.wayfinding_min_errors = data.data
+    def min_errors_callback(self, data):
+        self.min_errors = data.data
     
 
-    def wayfinding_mean_error_callback(self, data):
-        self.wayfinding_mean_error = data.data
+    def mean_error_callback(self, data):
+        self.mean_error = data.data
 
     def publishStatus(self, heartbeat):
-        if wayfinding_current_waypoint is not None:
-            heartbeat.values.append(KeyValue('current_waypoint',str(wayfinding_current_waypoint)))
-        if wayfinding_min_errors is not None:
-            for i in range(len(wayfinding_min_errors)):
-                heartbeat.values.append(KeyValue('min_error_'+str(i),str(wayfinding_min_errors[i])))
-        if wayfinding_mean_error is not None:
-            heartbeat.values.append(KeyValue('mean_error',str(wayfinding_mean_error)))
+        heartbeat.values.append(KeyValue('wayfinding status',self.status))
+        if self.current_waypoint is not None:
+            heartbeat.values.append(KeyValue('current_waypoint',str(self.current_waypoint)))
+        if self.min_errors is not None:
+            for i in range(len(self.min_errors)):
+                heartbeat.values.append(KeyValue('min_error_'+str(i),str(self.min_errors[i])))
+        if self.mean_error is not None:
+            heartbeat.values.append(KeyValue('mean_error',str(self.mean_error)))
+        
 
+    def pickNextWaypoint(self):
+        if self.waypoints is not None and len(self.waypoints):
+            if self.current_waypoint is None:
+                self.current_waypoint = 0
+            else:
+                self.current_waypoint += 1
+            if self.current_waypoint >= len(self.waypoints):
+                self.current_waypoint = 0
+            self.reached_current_waypoint_time = None
+            self.taskManager.navigator.set_goal(self.waypoints[self.current_waypoint])
+    
+
+    def iterate(self):
+        if self.waypoints is not None and len(self.waypoints):
+            if self.current_waypoint is None:
+                self.pickNextWaypoint()
+                
+            if self.reached_current_waypoint_time is None:
+                self.status = 'transit'
+                distance = self.taskManager.navigator.distanceBearingFrom(self.waypoints[self.current_waypoint])[0]
+                if distance < self.distance_considered_reached:
+                    self.reached_current_waypoint_time = rospy.Time().now()
+                    self.status = 'dwell'
+            else:
+                if rospy.Time.now() - self.reached_current_waypoint_time >= self.waypoint_dwell_time:
+                    self.pickNextWaypoint()
 
 #
 # Task 3 - Landmark Localization and Characterization (perception)
@@ -581,6 +684,7 @@ class PerceptionTask():
         self.taskManager = taskManager
         self.perception_landmark_publisher = rospy.Publisher('/vorc/perception/landmark', GeoPoseStamped, queue_size=10)
         self.perception_last_sent_timestamp = rospy.Time()
+        self.yaw_control = False
 
     def send_detects(self):
         if detected_targets is not None:
@@ -607,6 +711,7 @@ class GymkhanaTask():
         self.taskManager = taskManger
         self.status = 'find starting gate'
         self.pinger = SonarGuy(self)
+        self.yaw_control = False
 
 
     def iterate(self):
