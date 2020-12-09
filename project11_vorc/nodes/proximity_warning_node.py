@@ -71,7 +71,7 @@ class ProximitySensor():
             d = np.sqrt( (xx-self.odom.pose.pose.position.x)**2 + (yy-self.odom.pose.pose.position.y))
             
                     
-            if d is not None:
+            if np.any(mask):
                 closestIndexes = np.argsort(d[mask])
                 
                 P = PoseStamped()
