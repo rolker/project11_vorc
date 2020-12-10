@@ -165,4 +165,9 @@ if __name__ == '__main__':
     
     differential_pub = rospy.Publisher('differential_drive', DifferentialDrive, queue_size=1)
     
+    linearLdebug = pid_controller.RosDebugHelper(linearL_pid, '/simple_differential_controller/pid_debug/linearL/')
+    linearRdebug = pid_controller.RosDebugHelper(linearR_pid, '/simple_differential_controller/pid_debug/linearR/')
+    angular_debug =  pid_controller.RosDebugHelper(angular_pid, '/simple_differential_controller/pid_debug/angular/')
+    
+    
     rospy.spin()
