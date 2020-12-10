@@ -25,6 +25,7 @@ include_directories(
 # Run xacro to generate world files
 xacro_add_files(
   worlds/marina.world.xacro
+  worlds/perception.world.xacro
   worlds/station_keeping.world.xacro
   INORDER INSTALL DESTINATION worlds
 )

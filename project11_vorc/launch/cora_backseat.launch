@@ -1,17 +1,22 @@
 <launch>
     <rosparam command="load" file="$(find project11_vorc)/config/vorc.yaml" />
     
-    <arg name="viz" default="true" />
+    <arg name="viz" default="false" />
     <arg name="perception" default="true" />
     <arg name="rqt" default="false"/>
-    <arg name="camp" default="true" />
+    <arg name="camp" default="false" />
+    <arg name="simpler" default="false"/>
+    <arg name="gui" default="false"/>
 
     <include file="$(find project11_vorc)/launch/localization.launch"/>
     
     
     <node pkg="cora_helm" type="cora_helm_node.py" name="cora_helm"/>
 
-    <node pkg="cora_helm" type="simple_differential_controller.py" name="simple_controller">
+    <node unless="$(arg simpler)" pkg="cora_helm" type="simple_differential_controller.py" name="simple_controller">
+        <remap from="odom" to="/cora/robot_localization/odometry/filtered"/>
+    </node>
+    <node if="$(arg simpler)" pkg="cora_helm" type="simpler_differential_controller.py" name="simpler_controller">
         <remap from="odom" to="/cora/robot_localization/odometry/filtered"/>
     </node>
 
@@ -19,7 +24,9 @@
     
     <include file="$(find project11_vorc)/launch/navigation.launch"/>
     
-    <include if="$(arg perception)" file="$(find project11_vorc)/launch/perception.launch"/>
+    <include if="$(arg perception)" file="$(find project11_vorc)/launch/darknet.launch">
+        <arg name="gui"     value="$(arg gui)" />
+    </include>
     
     <node pkg="project11_vorc" type="vorc_task_manager.py" name="task_manager"/>
 
@@ -41,6 +48,7 @@
     <node if="$(arg camp)" pkg="camp" type="AutonomousMissionPlanner" name="camp"  args="$(find project11_vorc)/charts/ $(find project11_vorc)/charts/L16-23800-34552-16-16_16.kap"/>
     <node if="$(arg camp)" pkg="project11_vorc" type="occupancy_grid_to_camp.py" name="grid_to_camp">
         <remap from="occupancy_grid" to="/move_base/local_costmap/costmap"/>
+        <!--<remap from="occupancy_grid" to="/move_base/global_costmap/costmap"/>-->
     </node>
 
 </launch>
