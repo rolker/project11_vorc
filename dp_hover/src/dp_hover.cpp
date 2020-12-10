@@ -120,7 +120,7 @@ public:
             float yaw_to_dp_point_difference = yaw_to_dp_point - yaw;
             if (yaw_to_dp_point_difference > PI) { yaw_to_dp_point_difference = yaw_to_dp_point_difference - 2*PI;}
             if (yaw_to_dp_point_difference < -PI) { yaw_to_dp_point_difference = yaw_to_dp_point_difference + 2*PI;}
-            ROS_WARN("%0.3f,%0.3f",yaw_to_dp_point,yaw);
+            ROS_DEBUG("%0.3f,%0.3f",yaw_to_dp_point,yaw);
             // Normalize angle to +/- pi
             //yaw_to_dp_point_difference = fmod(yaw_to_dp_point_difference,2*PI);
             //if (yaw_to_dp_point_difference > PI){yaw_to_dp_point_difference -= (2*PI);}
@@ -144,10 +144,10 @@ public:
                 {
                     cmd.linear.x = -0.3;
                     cmd.angular.z = std::max(-m_maximum_angular_speed,std::min(m_maximum_angular_speed, yaw_to_dp_point_difference));
-                    ROS_WARN("DP Hover Start - Twist to Point R:%0.1f, dth: %0.2f", range,yaw_to_dp_point_difference);
+                    ROS_DEBUG("DP Hover Start - Twist to Point R:%0.1f, dth: %0.2f", range,yaw_to_dp_point_difference);
 
                 }else{
-                    ROS_WARN("Go To Point at Speed R:%0.1f, dth: %0.2f", range,yaw_to_dp_point_difference);
+                    ROS_DEBUG("Go To Point at Speed R:%0.1f, dth: %0.2f", range,yaw_to_dp_point_difference);
 
                 cmd.linear.x = m_maximum_speed;
                 cmd.angular.z = std::max(-m_maximum_angular_speed,std::min(m_maximum_angular_speed, yaw_to_dp_point_difference));
@@ -159,10 +159,10 @@ public:
             // hover point, proceeding slowly. 
             else if (range > m_minimum_distance)
             {
-                ROS_WARN("Middle Circle Slowing. R:%0.1f, dth: %0.2f", range,yaw_to_dp_point_difference);
+                ROS_DEBUG("Middle Circle Slowing. R:%0.1f, dth: %0.2f", range,yaw_to_dp_point_difference);
                 if (abs(yaw_to_dp_point_difference) > 0.03)
                 {
-                    ROS_WARN("Twist to Point, x=0 R:%0.1f", range);
+                    ROS_DEBUG("Twist to Point, x=0 R:%0.1f", range);
                     cmd.linear.x = .05;
                     //cmd.angular.z = std::max(-m_maximum_angular_speed,std::min(m_maximum_angular_speed, yaw_to_dp_point_difference));
                     cmd.angular.z = std::max(-float(1),std::min(float(1), yaw_to_dp_point_difference));
@@ -192,7 +192,7 @@ public:
 
                 // Setup for when we first enter this circle.
                 if (m_lastRange > m_minimum_distance | m_lastRange < m_minimum_distance / 5.0){     
-                    ROS_WARN("Reset Conditions...");
+                    ROS_DEBUG("Reset Conditions...");
                     m_stopAndTwistConditionNotMet = TRUE;
                     m_twistToPointConditionNotMet = TRUE;
                 }
@@ -237,7 +237,7 @@ public:
                 //if (m_twistToPointConditionNotMet == TRUE)
                 if (abs(yaw_to_dp_point_difference) > .03)
                 {
-                    ROS_WARN("Inner Circle Twist R:%0.1f, dth: %0.2f", range,yaw_to_dp_point_difference); 
+                    ROS_DEBUG("Inner Circle Twist R:%0.1f, dth: %0.2f", range,yaw_to_dp_point_difference); 
 
                     cmd.linear.x = -0.025; 
                     cmd.angular.z = std::max(-float(1),std::min(float(1), 2*yaw_to_dp_point_difference));
@@ -250,7 +250,7 @@ public:
                 }else
                 //if (m_stopAndTwistConditionNotMet == TRUE & m_twistToPointConditionNotMet == FALSE) 
                 {
-                    ROS_WARN("Inner Circle Proceed to Point R:%0.1f, dth: %0.2f", range,yaw_to_dp_point_difference);
+                    ROS_DEBUG("Inner Circle Proceed to Point R:%0.1f, dth: %0.2f", range,yaw_to_dp_point_difference);
 
                     //if (m_navTimer1 < 3){cmd.linear.x = 0;}else{cmd.linear.x =0.7;}
                     // Try to adjust the linear velocity down as you approach....
@@ -268,7 +268,7 @@ public:
             if (range < (m_minimum_distance/ 4.0)) 
             {
                 
-                ROS_WARN("HOVERING R:%0.1f, yawerr: %0.2f", range,yawerror);
+                ROS_DEBUG("HOVERING R:%0.1f, yawerr: %0.2f", range,yawerror);
                 //m_node_handle.setParam("/simple_differential_controller/enableAngularPID",0);
 
                 cmd.linear.x = 0;

@@ -29,7 +29,6 @@
     </include>
     
     <node pkg="project11_vorc" type="vorc_task_manager.py" name="task_manager"/>
-
     
     <include if="$(arg viz)" file="$(find project11_vorc)/launch/viz.launch"/>
   

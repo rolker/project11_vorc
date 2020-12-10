@@ -50,6 +50,7 @@ angular_pid = pid_controller.PID( Kp=angularPID_Kp, Ki=angularPID_Ki ,Kd=angular
 linearR_pid = pid_controller.PID( Kp=linearPID_Kp, Ki=linearPID_Ki, Kd=linearPID_Kd, windup_limit=linearPID_windup )
 
 def cmd_callback(data):
+    rospy.logdebug(data._connection_header['topic']+' from '+data._connection_header['callerid'])
     global last_command
     global last_command_time
 

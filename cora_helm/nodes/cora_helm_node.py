@@ -37,28 +37,33 @@ class CoraHelm:
         self.desired_command = {}
         
     def twistCallback(self,data):
+        rospy.logdebug(data._connection_header['topic']+' from '+data._connection_header['callerid'])
         self.helm_command['throttle'] = data.twist.linear.x
         self.helm_command['rudder'] = -data.twist.angular.z
         self.helm_command['timestamp'] = data.header.stamp
         self.applyThrustRudder()
     
     def differentialCallback(self,data):
+        rospy.logdebug(data._connection_header['topic']+' from '+data._connection_header['callerid'])
         self.dd_command['left'] = max(-1.0, min(1.0, data.left_thrust))
         self.dd_command['right'] = max(-1.0, min(1.0, data.right_thrust))
         self.dd_command['timestamp'] = data.header.stamp    
         self.applyThrustRudder()
         
     def helmCallback(self,data):
+        rospy.logdebug(data._connection_header['topic']+' from '+data._connection_header['callerid'])
         self.helm_command['throttle'] = data.throttle
         self.helm_command['rudder'] = data.rudder
         self.helm_command['timestamp'] = data.header.stamp
         self.applyThrustRudder()
 
     def desiredSpeedCallback(self, data):
+        rospy.logdebug(data._connection_header['topic']+' from '+data._connection_header['callerid'])
         self.desired_command['speed'] = data.twist.linear.x
         self.desired_command['speed_timestamp'] = data.header.stamp
 
     def desiredHeadingCallback(self, data):
+        rospy.logdebug(data._connection_header['topic']+' from '+data._connection_header['callerid'])
         self.desired_command['heading'] = data.orientation.heading
         self.desired_command['heading_timestamp'] = data.header.stamp
         self.applyThrustRudder()
