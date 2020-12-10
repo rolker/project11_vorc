@@ -528,7 +528,11 @@ class Lookout():
                 target = {'class':bb.Class, 'probability':bb.probability, 'corners':[], 'timestamp':data.image_header.stamp}
                 if self.left_camera_model is not None:
                     for corner in ((bb.xmax,bb.ymax),(bb.xmax,bb.ymin),(bb.xmin,bb.ymin),(bb.xmin,bb.ymax), (bb.xmin+(bb.xmax-bb.xmin)/2.0,bb.ymax)): #quick hack, last is bottom middle used as position
-                        corner_rectified = self.left_camera_model.rectifyPoint(corner)
+                        try:
+                            corner_rectified = self.left_camera_model.rectifyPoint(corner)
+                        except Exception as e:
+                            rospy.logwarn("rectifyPoint exception: "+str(e))
+                            corner_rectified = None
                         if corner_rectified is not None:
                             try:
                                 corner_ray = self.left_camera_model.projectPixelTo3dRay(corner_rectified)
@@ -829,9 +833,12 @@ class GymkhanaTask():
             if gate is not None:
                 print 'found it!'
                 print gate
+                self.taskManager.camp.markTargets((gate.left_target, gate.right_target))
                 self.seen_gates.append(gate)
-                self.taskManager.navigator.set_goal(gate.pose)
-                self.status = 'going to start'
+                staging_pose = gate.getCenterOffsetPose(-5)
+                self.yaw_control = True
+                self.taskManager.navigator.set_goal(staging_pose)
+                self.status = 'staging for for start'
             
         if self.status == 'find pinger' and pinger_location is not None and 'position_filtered' in pinger_location:
             goal = Pose()
@@ -909,12 +916,28 @@ class Gate():
         self.pose.orientation.z = q[2]
         self.pose.orientation.w = q[3]
         
+        self.probability_range = (min(left_target['probability'],right_target['probability']),max(left_target['probability'],right_target['probability']))
+        
     def __repr__(self):
-        return 'left: {lclass} {lp}, right: {rclass} {rp}\n  center: {c}, direction: {d}, width: {w}'.format(
+        return 'left: {lclass} {lp}, right: {rclass} {rp}\n  center: {c}, direction: {d}, width: {w}, prob: {prob[0]:.2} - {prob[1]:.2}'.format(
             lclass=self.left_target['class'], lp=self.left_target['position'],
             rclass=self.right_target['class'], rp=self.right_target['position'],
-            c=self.centroid, d=self.direction, w=self.width)
+            c=self.centroid, d=self.direction, w=self.width, prob=self.probability_range
+            )
 
+    # Get position offset from center of gate along the going-through axis.
+    # Negative is before gate
+    def getCenterOffsetPose(self, offset):
+        ret = Pose()
+        ret.orientation = self.pose.orientation
+        
+        direction_x = math.cos(self.direction)
+        direction_y = math.sin(self.direction)
+        
+        ret.position.x = self.pose.position.x + direction_x*offset
+        ret.position.y = self.pose.position.y + direction_y*offset
+        
+        return ret
         
 
 # crew member listening for the pinger
