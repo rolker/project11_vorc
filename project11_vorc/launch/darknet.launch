@@ -1,4 +1,6 @@
 <launch>
+    
+<!--    <node pkg="topic_tools" type="throttle" name="throttle_left_camera" args="messages /cora/sensors/cameras/front_left_camera/image_raw .5"/>-->
 
   <!-- Use YOLOv4 demo with 2 classes buoy_red and green_totem-->
   <!-- arg name="network_param_file"         default="$(find project11_vorc)/config/yolov4_vorc_demo.yaml"/-->

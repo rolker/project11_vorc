@@ -57,20 +57,23 @@ class TaskManager:
         self.task_info = data
         
         if self.task is None:
-            if self.task_info.state != 'inital': #wait until we're out of initial to make sure all nodes are done loading and stuff
+            if self.task_info.state != 'initial': #wait until we're out of initial to make sure all nodes are done loading and stuff
                 if self.task_info.name == 'stationkeeping':
                     self.task = StationKeepingTask(self)
                 if self.task_info.name == 'wayfinding':
                     self.task = WayfindingTask(self)
                 if self.task_info.name == 'perception':
                     self.task = PerceptionTask(self)
+                if self.task_info.name == 'gymkhana':
+                    self.task = GymkhanaTask(self)
 
-    def iterate(self, event):    
+    def iterate(self, event):
         if self.task is not None:
             self.task.iterate()
         self.navigator.iterate()
         self.camp.iterate()
         self.lookout.iterate()
+        
 
     def publishStatus(self, heartbeat):
 
@@ -107,13 +110,10 @@ class Navigator:
         rospy.Subscriber('/cmd_vel', Twist, self.cmd_vel_callback)
         rospy.Subscriber('/differential_drive', DifferentialDrive, self.differential_drive_callback)
 
-        rospy.wait_for_service('/move_base/make_plan')
-        rospy.wait_for_service('/cora/robot_localization/fromLL')
-        rospy.wait_for_service('/cora/robot_localization/toLL')
 
-        self.make_plan_service = rospy.ServiceProxy('/move_base/make_plan', GetPlan, persistent=True)
-        self.fromll_service = rospy.ServiceProxy('/cora/robot_localization/fromLL', FromLL, persistent=True)
-        self.toll_service = rospy.ServiceProxy('/cora/robot_localization/toLL', ToLL, persistent=True)
+        self.make_plan_service = rospy.ServiceProxy('/move_base/make_plan', GetPlan)#, persistent=True)
+        self.fromll_service = rospy.ServiceProxy('/cora/robot_localization/fromLL', FromLL)#, persistent=True)
+        self.toll_service = rospy.ServiceProxy('/cora/robot_localization/toLL', ToLL)#, persistent=True)
 
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
@@ -144,6 +144,7 @@ class Navigator:
         elif self.odometry is not None:
             rospy.logdebug('planning...')
             try:
+                rospy.wait_for_service('/move_base/make_plan',1)
                 r = GetPlanRequest()
                 r.goal.pose = self.goal
                 r.goal.header.frame_id = 'map'
@@ -157,6 +158,7 @@ class Navigator:
     
     def fromLL(self, lat, lon, alt=0.0):
         try:
+            rospy.wait_for_service('/cora/robot_localization/fromLL',1)
             r = FromLLRequest()
             r.ll_point.latitude = lat
             r.ll_point.longitude = lon
@@ -167,6 +169,7 @@ class Navigator:
 
     def toLL(self, x, y, z=0.0):
         try:
+            rospy.wait_for_service('/cora/robot_localization/toLL',1)
             r = ToLLRequest()
             r.map_point.x = x
             r.map_point.y = y
@@ -322,7 +325,7 @@ class Helm():
 
                     # to prevent oscilations when needing to turn around and can't decide which way...
                     if relative_bearing < -math.pi/2.0 or relative_bearing > math.pi/2.0:
-                        print 'behind us!'
+                        #print 'behind us!'
                         if self.uturn_direction is None:
                             if relative_bearing > 0:
                                 self.uturn_direction = 'left'
@@ -345,7 +348,7 @@ class Helm():
                     if overall_distance < 25: # slow down more if getting close
                         speed *= 0.5
                     
-                    print 'sugg yaw:', suggested_yaw, 'relative:', relative_bearing, 'speed:', speed, 'yaw rate:', yaw_speed
+                    #print 'sugg yaw:', suggested_yaw, 'relative:', relative_bearing, 'speed:', speed, 'yaw rate:', yaw_speed
                     t = Twist()
                     t.linear.x = speed
                     t.angular.z = yaw_speed
@@ -434,7 +437,6 @@ class Camp():
         pgroup.color.b = 0.6
         pgroup.color.a = 1.0
         pgroup.size = 3.0
-
         ll = self.taskManager.navigator.toLL(pinger.x,pinger.y,pinger.z)
         if ll is not None:
             gp = GeoPoint()
@@ -508,8 +510,8 @@ class Lookout():
         detected_targets = []
         try:
             transformation = self.taskManager.navigator.tf_buffer.lookup_transform('map', data.image_header.frame_id, data.image_header.stamp, rospy.Duration(1.0))
-        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-            print 'transformation exception'
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
+            rospy.logwarn('darknet detects callback transformation exception: '+str(e))
         else:
             # ground plane eq: z=0
             # line eq: P=p1+u(p2-p1)
@@ -528,22 +530,27 @@ class Lookout():
                     for corner in ((bb.xmax,bb.ymax),(bb.xmax,bb.ymin),(bb.xmin,bb.ymin),(bb.xmin,bb.ymax), (bb.xmin+(bb.xmax-bb.xmin)/2.0,bb.ymax)): #quick hack, last is bottom middle used as position
                         corner_rectified = self.left_camera_model.rectifyPoint(corner)
                         if corner_rectified is not None:
-                            corner_ray = self.left_camera_model.projectPixelTo3dRay(corner_rectified)
-                        
-                            rospy.logdebug("pixel ray: {}".format(str(corner_ray)))
+                            try:
+                                corner_ray = self.left_camera_model.projectPixelTo3dRay(corner_rectified)
+                            except Exception as e:
+                                rospy.logwarn('projectPixelTo3dRay exception:'+str(e))
+                                P=None
+                            else:
+                            
+                                rospy.logdebug("pixel ray: {}".format(str(corner_ray)))
+                                    
+                                pixel_in_camera_frame = PoseStamped()
+                                pixel_in_camera_frame.pose.position.x = corner_ray[0]
+                                pixel_in_camera_frame.pose.position.y = corner_ray[1]
+                                pixel_in_camera_frame.pose.position.z = corner_ray[2]
+                                pixel_in_camera_frame.pose.orientation.w = 1.0
+                                pixel_in_map_frame = tf2_geometry_msgs.do_transform_pose(pixel_in_camera_frame, transformation)
+                                p2 = pixel_in_map_frame.pose.position
                                 
-                            pixel_in_camera_frame = PoseStamped()
-                            pixel_in_camera_frame.pose.position.x = corner_ray[0]
-                            pixel_in_camera_frame.pose.position.y = corner_ray[1]
-                            pixel_in_camera_frame.pose.position.z = corner_ray[2]
-                            pixel_in_camera_frame.pose.orientation.w = 1.0
-                            pixel_in_map_frame = tf2_geometry_msgs.do_transform_pose(pixel_in_camera_frame, transformation)
-                            p2 = pixel_in_map_frame.pose.position
-                            
-                            rospy.logdebug("p1: {},{},{} p2: {},{},{}".format(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z))
-                            
-                            u = -p1.z/(p2.z-p1.z)
-                            P = (p1.x+u*(p2.x-p1.x),p1.y+u*(p2.y-p1.y),0.0)
+                                rospy.logdebug("p1: {},{},{} p2: {},{},{}".format(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z))
+                                
+                                u = -p1.z/(p2.z-p1.z)
+                                P = (p1.x+u*(p2.x-p1.x),p1.y+u*(p2.y-p1.y),0.0)
                         else:
                             p = None
                         
@@ -552,9 +559,9 @@ class Lookout():
                         else:
                             target['position'] = P
                 detected_targets.append(target)
-        self.taskManager.camp.markTargets(detected_targets)
-        if self.taskManager.task is not None:
-            self.taskManager.task.targets_detected(detected_targets)
+            #self.taskManager.camp.markTargets(detected_targets)
+            if self.taskManager.task is not None:
+                self.taskManager.task.targets_detected(detected_targets)
                 
     def iterate(self):
         pass
@@ -804,25 +811,111 @@ class GymkhanaTask():
     def __init__(self, taskManger):
         self.taskManager = taskManger
         self.status = 'find starting gate'
-        self.pinger = SonarGuy(self)
+        self.pinger = SonarGuy(self.taskManager)
         self.yaw_control = False
+        self.detected_targets = None
+    
+        self.max_gate_separation = 25
+        self.min_gate_separation = 15
+        self.fudge_factor = 1
+
+        self.seen_gates = []
 
 
     def iterate(self):
         self.pinger.iterate()
-        if taskManager.status == 'idle' and pinger_location is not None and 'position_filtered' in pinger_location:
+        if self.status == 'find starting gate':
+            gate = self.findGate(('surmark46104',))
+            if gate is not None:
+                print 'found it!'
+                print gate
+                self.seen_gates.append(gate)
+                self.taskManager.navigator.set_goal(gate.pose)
+                self.status = 'going to start'
+            
+        if self.status == 'find pinger' and pinger_location is not None and 'position_filtered' in pinger_location:
             goal = Pose()
             goal.position = pinger_location['position_filtered']
             goal.orientation.w = 1.0
-            set_goal(goal)
-            taskManager.status = 'goal_set'
-            #do_hover(goal,which_one='dp_hover')
+            self.taskManager.navigator.set_goal(goal)
+            self.status = 'going to pinger'
+
+    def averagePosition(self, targetList):
+        sums = [0,0,0]
+        for t in targetList:
+            for i in (0,1,2):
+                sums[i] += t['position'][i]
+        
+        ret = []
+        for s in sums:
+            ret.append(s/float(len(targetList)))
+        return ret
 
     def publishStatus(self, heartbeat):
         heartbeat.values.append(KeyValue('gymkhana status',self.status))
 
     def targets_detected(self, detected_targets):
-        pass
+        self.detected_targets = detected_targets
+
+    def distanceBetweenTargets(self, t1, t2):
+        if 'position' in t1 and 'position' in t2:
+            p1 = t1['position']
+            p2 = t2['position']
+            dx = p2[0] - p1[0]
+            dy = p2[1] - p1[1]
+            return math.sqrt(dx*dx + dy*dy)
+
+    def findGate(self, possible_left_markers):
+        #print 'looking for', possible_left_markers
+        if self.detected_targets is not None:
+            left_candidates = []
+            for target in self.detected_targets:
+                if target['class'] in possible_left_markers:
+                    left_candidates.append(target)
+            #print 'left candidates',left_candidates
+            for potential_left in left_candidates:
+                for potential_right in self.detected_targets:
+                    if potential_right['class'] in ('surmark950410','red_totem','buoy_red'):
+                        distance = self.distanceBetweenTargets(potential_left, potential_right)
+                        print '  distance:',distance, potential_left['class'],potential_left['position'],potential_right['class'],potential_right['position']
+                        if distance is not None and distance < self.max_gate_separation+self.fudge_factor and distance > self.min_gate_separation-self.fudge_factor:
+                            return Gate(potential_left,potential_right)
+                            
+class Gate():
+    def __init__(self, left_target, right_target):
+        self.left_target = left_target
+        self.right_target = right_target
+        
+        p1 = left_target['position']
+        p2 = right_target['position']
+                
+        self.centroid = ( (p1[0]+p2[0])/2.0, (p1[1]+p2[1])/2.0)
+        
+        dx = p2[0] - p1[0]
+        dy = p2[1] - p1[1]
+
+        self.width =  math.sqrt(dx*dx + dy*dy)
+        
+        self.direction = math.atan2(dy,dx) # direction from left to right targets
+        self.direction += math.pi/2.0 # turn 90 degs for direction to cross gate
+        
+        self.pose = Pose()
+        self.pose.position.x = self.centroid[0]
+        self.pose.position.y = self.centroid[1]
+        
+        q = tf.transformations.quaternion_from_euler(0, 0, self.direction)
+        self.pose.orientation.x = q[0]
+        self.pose.orientation.y = q[1]
+        self.pose.orientation.z = q[2]
+        self.pose.orientation.w = q[3]
+        
+    def __repr__(self):
+        return 'left: {lclass} {lp}, right: {rclass} {rp}\n  center: {c}, direction: {d}, width: {w}'.format(
+            lclass=self.left_target['class'], lp=self.left_target['position'],
+            rclass=self.right_target['class'], rp=self.right_target['position'],
+            c=self.centroid, d=self.direction, w=self.width)
+
+        
 
 # crew member listening for the pinger
 class SonarGuy():
@@ -836,7 +929,10 @@ class SonarGuy():
                 self.taskManager.camp.markPinger(pinger_location[pinger],pinger)
 
 
-rospy.init_node('vorc_task_manager')
+print 'sleeping to let things settle down'
+rospy.sleep(2)
+print 'awake now!'
+rospy.init_node('vorc_task_manager') #, log_level=rospy.DEBUG)
 
 
 
@@ -954,9 +1050,9 @@ def updatePingerFilter(pingerMeasurement):
     pos = PoseWithCovarianceStamped()
     pos.header.stamp = rospy.Time.now()
     pos.header.frame_id = 'cora/pinger'
-    pos.pose.pose.position.x = pingerTracker.x_post[0]
-    pos.pose.pose.position.y = pingerTracker.x_post[2]
-    pos.pose.pose.position.z = pingerTracker.x_post[4]
+    pos.pose.pose.position.x = pingerTracker.x_post[0][0]
+    pos.pose.pose.position.y = pingerTracker.x_post[2][0]
+    pos.pose.pose.position.z = pingerTracker.x_post[4][0]
     pos.pose.covariance = pingerTracker.P_post.flatten()
     pingerPubfiltered.publish(pos)
     
@@ -1014,7 +1110,7 @@ def init_UKFPingerFilter(X,R):
 
 def pinger_callback(data):
     global pinger_location
-    print 'ping!'
+    #print 'ping!'
     
     if pinger_location is None:
         pinger_location = {}
@@ -1022,7 +1118,7 @@ def pinger_callback(data):
     try:
         transformation = taskManager.navigator.tf_buffer.lookup_transform('map', data.header.frame_id, data.header.stamp, rospy.Duration(1.0))
     except Exception as e: #(tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-        print 'transformation exception:',e
+        print 'pinger callback transformation exception:',e
     else:
         v = Vector3Stamped()
         v.vector.x = data.range
@@ -1131,6 +1227,12 @@ def pinger_callback(data):
     
 # moved to SonarGuy
 #rospy.Subscriber('/cora/sensors/pingers/pinger/range_bearing', RangeBearing, pinger_callback) 
+
+#def debug_signal_handler(signal, frame):
+    #import ipdb
+    #ipdb.set_trace()
+#import signal
+#signal.signal(signal.SIGINT, debug_signal_handler)
 
 #
 # Let 'r rip!

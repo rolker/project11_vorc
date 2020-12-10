@@ -31,4 +31,6 @@
         <rosparam file="$(find project11_vorc)/config/base_local_planner_params.yaml" command="load" />
         <param name="base_global_planner" value="global_planner/GlobalPlanner"/>
     </node>
+    
+    <!--<node pkg="project11_vorc" type="proximity_warning_node.py" name="proximity_warning"/>-->
 </launch>
