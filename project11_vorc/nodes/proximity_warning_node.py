@@ -32,6 +32,7 @@ class ProximitySensor():
         
         # Hold Last measurd bearing for obstacles in each quadrant
         self.lastBearings = [None, None, None, None]
+        self.last_yaw = None
     
         
         self.plotonce = False
@@ -124,6 +125,9 @@ class ProximitySensor():
                 for idx in range(4):
                     
                     W.data.append(Vector3())
+                    W.data[idx].x = np.nan 
+                    W.data[idx].y = np.nan
+                    W.data[idx].z = np.nan
                     # If there's are any occupied cells there...
                     M = mask & quad_masks[idx]
                     if np.any(M):
