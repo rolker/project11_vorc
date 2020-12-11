@@ -433,6 +433,35 @@ class Camp():
             pgroup.points.append(gp)
             vizItem.point_groups.append(pgroup)
         self.display_publisher.publish(vizItem)
+        
+    def markGate(self, gate):
+        vizItem = GeoVizItem()
+        vizItem.id = 'gate'
+
+        plist = GeoVizPointList()
+        plist.color.r = 0.8
+        plist.color.g = 0.99
+        plist.color.b = 0.8
+        plist.color.a = 1.0
+        plist.size = 3.0
+
+        lp = gate.left_position
+        ll = self.taskManager.navigator.toLL(lp[0],lp[1],lp[2])
+        if ll is not None:
+            gp = GeoPoint()
+            gp.latitude = ll.latitude
+            gp.longitude = ll.longitude
+            plist.points.append(gp)
+            rp = gate.right_position
+            ll = self.taskManager.navigator.toLL(rp[0],rp[1],rp[2])
+            if ll is not None:
+                gp = GeoPoint()
+                gp.latitude = ll.latitude
+                gp.longitude = ll.longitude
+                plist.points.append(gp)
+                vizItem.lines.append(plist)
+        self.display_publisher.publish(vizItem)
+        
 
     def markPinger(self, pinger, label):
         vizItem = GeoVizItem()
@@ -825,28 +854,59 @@ class GymkhanaTask():
         self.status = 'find starting gate'
         self.pinger = SonarGuy(self.taskManager)
         self.yaw_control = False
-        self.detected_targets = None
     
-        self.max_gate_separation = 25
-        self.min_gate_separation = 15
-        self.fudge_factor = 1
-
-        self.seen_gates = []
-
+        self.gates = GateManager()
 
     def iterate(self):
         self.pinger.iterate()
+        
+        our_position = self.taskManager.navigator.pose
+        self.gates.updatePosition(our_position)
+        
         if self.status == 'find starting gate':
-            gate = self.findGate(('surmark46104',))
-            if gate is not None:
+            if self.gates.start_gate is not None:
                 rospy.loginfo('found starting gate!')
-                rospy.loginfo(gate)
-                self.taskManager.camp.markTargets((gate.left_target, gate.right_target))
-                self.seen_gates.append(gate)
-                staging_pose = gate.getCenterOffsetPose(-5)
+                rospy.loginfo(self.gates.start_gate)
+                self.taskManager.camp.markGate(self.gates.start_gate)
+                staging_pose = self.gates.start_gate.getCenterOffsetPose(-5)
                 self.yaw_control = True
                 self.taskManager.navigator.set_goal(staging_pose)
-                self.status = 'staging for for start'
+                self.status = 'stage for start'
+                return
+            
+        if self.status == 'stage for start':
+            # make sure we don't jump the start!
+            if self.taskManager.task_info.state == 'running':
+                self.status = 'approach gate'
+                self.taskManager.navigator.helm.max_speed = 5
+
+        if self.status in ('approach gate', 'cross gate'):
+            if self.gates.current_gate is None:
+                self.status = 'find next gate'
+                self.taskManager.camp.markGate(None)
+            else:
+                current = self.gates.current_gate
+                self.taskManager.camp.markGate(current)
+                if current.isPoseInRadius(our_position):
+                    exit_pose = current.getCenterOffsetPose(current.width)
+                    self.taskManager.navigator.set_goal(exit_pose)
+                    self.status = 'cross gate'
+                else:
+                    approach_pose = current.getCenterOffsetPose(-1)
+                    self.taskManager.navigator.set_goal(approach_pose)
+                    self.status = 'approach gate'
+
+        if self.status == 'find next gate':
+            if self.gates.current_gate is not None:
+                self.status = 'approach gate'
+            else:
+                pass # do a search
+
+        if self.gates.finish_gate is not None:
+            if self.gates.finish_gate.crossed:
+                self.status = 'find pinger'
+        
+            
             
         if self.status == 'find pinger' and pinger_location is not None and 'position_filtered' in pinger_location:
             goal = Pose()
@@ -855,22 +915,91 @@ class GymkhanaTask():
             self.taskManager.navigator.set_goal(goal)
             self.status = 'going to pinger'
 
-    def averagePosition(self, targetList):
-        sums = [0,0,0]
-        for t in targetList:
-            for i in (0,1,2):
-                sums[i] += t['position'][i]
-        
-        ret = []
-        for s in sums:
-            ret.append(s/float(len(targetList)))
-        return ret
-
     def publishStatus(self, heartbeat):
         heartbeat.values.append(KeyValue('task status',self.status))
 
     def targets_detected(self, detected_targets):
-        self.detected_targets = detected_targets
+        self.gates.findGates(detected_targets)
+
+
+class GateManager():
+    def __init__(self):
+        self.max_gate_separation = 25
+        self.min_gate_separation = 15
+        self.fudge_factor = 1
+
+        self.current_gate = None
+
+        self.start_gate = None
+        self.finish_gate = None
+        self.gates = []
+
+    def updatePosition(self, pose):
+
+        # are we done?
+        if self.finish_gate is not None:
+            if self.finish_gate.crossed:
+                return
+
+        # do we need to start?
+        if self.current_gate is None:
+            self.current_gate = self.start_gate
+            return
+        
+        crossed_current = not self.current_gate.isPositionBehindGate(pose)
+        
+        if crossed_current:
+            self.current_gate.crossed = True
+            rospy.loginfo('gate crossed!')
+            
+            uncrossed_gates = []
+            for g in self.gates:
+                if not g.crossed:
+                    d = g.distanceToPose(pose)
+                    heapq.heappush((d,g)) #priority queue to sort by distance
+                    
+            if len(uncrossed_gates) == 0:
+                self.current_gate = self.finish_gate
+                return
+            
+            self.current_gate = heapq.heappop(uncrossed_gates)
+            
+        
+        
+    def findGates(self, targets):
+        gates = []
+        if targets is not None:
+            left_candidates = []
+            for target in targets:
+                if target['class'] in Gate.left_all:
+                    left_candidates.append(target)
+            #print 'left candidates',left_candidates
+            for potential_left in left_candidates:
+                for potential_right in targets:
+                    if potential_right['class'] in Gate.right_all:
+                        distance = self.distanceBetweenTargets(potential_left, potential_right)
+                        #rospy.logdebug('  distance: {}, left {} {}, right {} {}'.format(distance, potential_left['class'],potential_left['position'],potential_right['class'],potential_right['position']))
+                        if distance is not None and distance < self.max_gate_separation+self.fudge_factor and distance > self.min_gate_separation-self.fudge_factor:
+                            gates.append(Gate(potential_left,potential_right))
+        new_gates = []
+        for g in gates:
+            if g.isStart():
+                if self.start_gate is None:
+                    self.start_gate = g
+                else:
+                    self.start_gate.ingest(g, forced=True)
+            elif g.isFinish():
+                if self.finish_gate is None:
+                    self.finish_gate = g
+                else:
+                    self.finish_gate.ingest(g, forced=True)
+            else:
+                for existing_gate in self.gates:
+                    if not existing_gate.ingest(g):
+                        new_gates.append(g)
+        for ng in new_gates:
+            self.gates.append(ng)
+        
 
     def distanceBetweenTargets(self, t1, t2):
         if 'position' in t1 and 'position' in t2:
@@ -879,31 +1008,37 @@ class GymkhanaTask():
             dx = p2[0] - p1[0]
             dy = p2[1] - p1[1]
             return math.sqrt(dx*dx + dy*dy)
-
-    def findGate(self, possible_left_markers):
-        #print 'looking for', possible_left_markers
-        if self.detected_targets is not None:
-            left_candidates = []
-            for target in self.detected_targets:
-                if target['class'] in possible_left_markers:
-                    left_candidates.append(target)
-            #print 'left candidates',left_candidates
-            for potential_left in left_candidates:
-                for potential_right in self.detected_targets:
-                    if potential_right['class'] in ('surmark950410','red_totem','buoy_red'):
-                        distance = self.distanceBetweenTargets(potential_left, potential_right)
-                        #rospy.logdebug('  distance: {}, left {} {}, right {} {}'.format(distance, potential_left['class'],potential_left['position'],potential_right['class'],potential_right['position']))
-                        if distance is not None and distance < self.max_gate_separation+self.fudge_factor and distance > self.min_gate_separation-self.fudge_factor:
-                            return Gate(potential_left,potential_right)
+        
                             
 class Gate():
+    left_start = 'surmark46104' #white
+    left_finish = 'blue_totem'
+    left_all = ('surmark46104', 'blue_totem', 'green_totem', 'surmark950400')
+    right_all = ('surmark950410','red_totem','buoy_red')
+    
     def __init__(self, left_target, right_target):
-        self.left_target = left_target
-        self.right_target = right_target
+        self.left_targets = [left_target]
+        self.right_targets = [right_target]
+        self.update()
         
-        p1 = left_target['position']
-        p2 = right_target['position']
+        self.crossed = False
+
+    def ingest(self, new_gate, forced = False):
+        if forced or self.isPoseInRadius(new_gate.pose):
+            self.left_targets.append(new_gate.left_targets[0])
+            self.right_targets.append(new_gate.right_targets[0])
+            self.update()
+            return True
+        return False
+
+    def update(self):
+        
+        self.left_position = self.averagePosition(self.left_targets)
+        self.right_position = self.averagePosition(self.right_targets)
                 
+        p1 = self.left_position
+        p2 = self.right_position
+        
         self.centroid = ( (p1[0]+p2[0])/2.0, (p1[1]+p2[1])/2.0)
         
         dx = p2[0] - p1[0]
@@ -911,8 +1046,8 @@ class Gate():
 
         self.width =  math.sqrt(dx*dx + dy*dy)
         
-        self.direction = math.atan2(dy,dx) # direction from left to right targets
-        self.direction += math.pi/2.0 # turn 90 degs for direction to cross gate
+        self.left_to_right_direction = math.atan2(dy,dx) # direction from left to right targets
+        self.direction = self.left_to_right_direction + math.pi/2.0 # turn 90 degs for direction to cross gate
         
         self.pose = Pose()
         self.pose.position.x = self.centroid[0]
@@ -924,13 +1059,11 @@ class Gate():
         self.pose.orientation.z = q[2]
         self.pose.orientation.w = q[3]
         
-        self.probability_range = (min(left_target['probability'],right_target['probability']),max(left_target['probability'],right_target['probability']))
-        
     def __repr__(self):
-        return 'left: {lclass} {lp}, right: {rclass} {rp}\n  center: {c}, direction: {d}, width: {w}, prob: {prob[0]:.2} - {prob[1]:.2}'.format(
-            lclass=self.left_target['class'], lp=self.left_target['position'],
-            rclass=self.right_target['class'], rp=self.right_target['position'],
-            c=self.centroid, d=self.direction, w=self.width, prob=self.probability_range
+        return 'left: {lp}, right: {rp}\n  center: {c}, direction: {d}, width: {w}, start?: {start}, finish?: {finish}'.format(
+            lp=self.left_position, rp=self.right_position,
+            c=self.centroid, d=self.direction, w=self.width,
+            start=self.isStart(), finish=self.isFinish()
             )
 
     # Get position offset from center of gate along the going-through axis.
@@ -946,7 +1079,54 @@ class Gate():
         ret.position.y = self.pose.position.y + direction_y*offset
         
         return ret
+    
+    def distanceToPose(self, pose):
+        if pose is not None:
+            dx = pose.position.x - self.pose.position.x
+            dy = pose.position.y - self.pose.position.y
+            d2 = dx*dx+dy*dy
+            return math.sqrt(d2)
+
+    def isPoseInRadius(self, pose):
+        d = self.distanceToPose(pose)
+        if d is None:
+            return False
+        return d < self.width/2.0
         
+    def isStart(self):
+        return self.left_targets[0]['class'] == Gate.left_start
+
+    def isFinish(self):
+        return self.left_targets[0]['class'] == Gate.left_finish
+
+    def averagePosition(self, targetList):
+        sums = [0,0,0]
+        for t in targetList:
+            for i in (0,1,2):
+                sums[i] += t['position'][i]
+        
+        ret = []
+        for s in sums:
+            ret.append(s/float(len(targetList)))
+        return ret
+
+    def isPositionBehindGate(self, pose):
+        dx = pose.position.x - self.left_position[0]
+        dy = pose.position.y - self.left_position[1]
+        
+        left_to_positon_angle = math.atan2(dx, dy)
+        
+        difference = left_to_positon_angle - self.left_to_right_direction
+        
+        while difference < -math.pi:
+            difference += 2*math.pi
+        while difference > math.pi:
+            difference -= 2*math.pi
+        
+        return difference < 0
+        
+        
+
 
 # crew member listening for the pinger
 class SonarGuy():
