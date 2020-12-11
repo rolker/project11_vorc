@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<!-- Model for the short navigation course -->
+<sdf version="1.6">
+  <model name="exit_gates_0">
+
+    <!-- Left_border -->
+    <include>
+      <name>blue_bound_0</name>
+      <pose>0 0 0 0 0 0</pose>
+      <uri>model://blue_totem</uri>
+    </include>
+
+
+    <!-- Right_boarder -->
+    <include>
+      <name>red_bound_0</name>
+      <pose>0 -20 0.2 0 0 0</pose>
+      <uri>model://surmark950410</uri>
+    </include>
+
+
+  </model>
+
+</sdf>
