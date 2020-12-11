@@ -55,9 +55,10 @@ def cmd_callback(data):
     global last_command_time
 
     last_command = data
-    last_command_time = datetime.datetime.now()
+    last_command_time = rospy.Time.now()
     
 def odom_callback(data):
+    global last_command_time
     global last_odom_time
     global linearPID_Kp
     global linearPID_Ki
@@ -71,8 +72,8 @@ def odom_callback(data):
 
     # Don't check for new PID parameters more frequently that 1 Hz.
     if last_odom_time is None:
-        last_odom_time = datetime.datetime.now()
-    if (datetime.datetime.now() - last_odom_time) >= datetime.timedelta(seconds=1.0):
+        last_odom_time = rospy.Time.now()
+    if (rospy.Time.now() - last_odom_time) >= rospy.Duration(1.0):
         linearPID_Kp = rospy.get_param('/simple_differential_controller/linearPID_Kp')
         linearPID_Ki = rospy.get_param('/simple_differential_controller/linearPID_Ki')
         linearPID_Kd = rospy.get_param('/simple_differential_controller/linearPID_Kd')
@@ -108,12 +109,15 @@ def odom_callback(data):
                                      angularPID_Ki,
                                      angularPID_Kd,
                                      angularPID_windup)
-        last_odom_time = datetime.datetime.now()
+        last_odom_time = rospy.Time.now()
 
-    if (last_command is not None and
-            last_command_time is not None and
-            datetime.datetime.now()-last_command_time < datetime.timedelta(seconds=0.5)):
-
+    #if (last_command is not None and
+    #        last_command_time is not None and
+    #        datetime.datetime.now()-last_command_time < datetime.timedelta(seconds=0.5)):
+    if ( (last_command is not None) and
+            (last_command_time is not None) and
+            (rospy.Time.now() - last_command_time < rospy.Duration(0.5))):
+    
         angular_pid.set_point = last_command.angular.z
 
         angular = angular_pid.update(data.twist.twist.angular.z) # positive is conter-clockwase
@@ -134,6 +138,8 @@ def odom_callback(data):
         linearL = linearL_pid.update(data.twist.twist.linear.x)
         linearR = linearR_pid.update(data.twist.twist.linear.x)
 
+        linearL = max(-1,min(1,linearL))
+        linearR = max(-1,min(1,linearR))
            
         '''
         total_control = abs(linear) + abs(angular)
