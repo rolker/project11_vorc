@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<!-- Model for the short navigation course -->
+<sdf version="1.6">
+  <model name="course_01_VES">
+
+    <!-- Start gates. -->
+    <include>
+      <name>start_gates_0</name>
+      <pose>-30 0 0 0 0 -3.14159</pose>
+      <uri>model://start_gates_0</uri>
+    </include>
+    
+    <!-- Staggered gates end x,y = 0,50 -->
+    <include>
+      <name>staggered_gates</name>
+      <pose>-120 0 0 0 0 -3.14159</pose>
+      <uri>model://staggered_gates0</uri>
+    </include>
+
+    <!-- Left Turn gates end x,y = 0,40 -->
+    <include>
+      <name>left_turn_gates0</name>
+      <pose>-150 0 0 0 0 -3.1415</pose>
+      <uri>model://left_turn_gates0</uri>
+    </include>
+
+        <!-- Exit gates -->
+    <include>
+      <name>exit_gates_0</name>
+      <pose>-200 -70 0.2 0 0 -1.57</pose>
+      <uri>model://exit_gates_0</uri>
+    </include>
+
+    
+    <!-- Obstacle Course -->
+    <include>
+      <name>obstacle_course_01</name>
+      <pose>-220 -120 0 0 0 -3.14159</pose>
+      <uri>model://obstacle_course_01</uri>
+    </include>
+
+    <include>
+      <name>obstacle_course_02</name>
+      <pose>-190 -180 0 0 0 -3.14159</pose>
+      <uri>model://obstacle_course_01</uri>
+    </include>
+
+  </model>
+
+</sdf>
