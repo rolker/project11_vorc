@@ -81,5 +81,19 @@ class PID:
 
         return ret
 
+class RosDebugHelper():
+    def __init__(self, pid, topic_prefix):
+        self.topic_prefix = topic_prefix
+        self.publishers = {}
+        pid.debug_callback = self.debug_callback
         
+    def debug_callback(self, data):
+        #import those here to not make this module depend on ROS
+        import rospy
+        from std_msgs.msg import Float32
+
+        for key,value in data.iteritems():
+            if not key in self.publishers:
+                self.publishers[key] = rospy.Publisher(self.topic_prefix+key,Float32,queue_size=1)
+            self.publishers[key].publish(value)
         

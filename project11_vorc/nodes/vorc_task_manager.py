@@ -118,9 +118,9 @@ class Navigator:
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
         
-        self.min_waypoint_distance = 2.0
+        self.waypoint_capture_distance = 5.0
+        self.waypoint_escape_distance = 7.5
         self.plan_expiration = rospy.Duration(1.0)
-        self.hover_radius = 3.5
     
     def odometry_callback(self, data):
         self.odometry = data
@@ -142,19 +142,25 @@ class Navigator:
         if self.goal is None:
             self.plan = None
         elif self.odometry is not None:
-            rospy.logdebug('planning...')
-            try:
-                rospy.wait_for_service('/move_base/make_plan',1)
-                r = GetPlanRequest()
-                r.goal.pose = self.goal
-                r.goal.header.frame_id = 'map'
-                r.start.header.frame_id = 'map'
-                r.start.pose = self.odometry.pose.pose
-                self.plan = self.make_plan_service(r).plan
-                self.plan.header.stamp = rospy.Time.now()
+            # do we need a plan or to hover?
+            distance = self.distanceBearingFrom(self.goal)[0]
+            if distance <= self.waypoint_capture_distance:
+                self.plan = None
                 self.taskManager.camp.showPlan(self.plan)
-            except rospy.ServiceException as e:
-                print("Make plan service call failed: %s"%e)
+            else:
+                rospy.logdebug('planning...')
+                try:
+                    rospy.wait_for_service('/move_base/make_plan',1)
+                    r = GetPlanRequest()
+                    r.goal.pose = self.goal
+                    r.goal.header.frame_id = 'map'
+                    r.start.header.frame_id = 'map'
+                    r.start.pose = self.odometry.pose.pose
+                    self.plan = self.make_plan_service(r).plan
+                    self.plan.header.stamp = rospy.Time.now()
+                    self.taskManager.camp.showPlan(self.plan)
+                except rospy.ServiceException as e:
+                    rospy.logwarn("Make plan service call failed: {}".format(e))
     
     def fromLL(self, lat, lon, alt=0.0):
         try:
@@ -165,7 +171,7 @@ class Navigator:
             r.ll_point.altitude = alt
             return self.fromll_service(r).map_point
         except rospy.ServiceException as e:
-            print("FromLL Service call failed: %s"%e)
+            rospy.logwarn("FromLL Service call failed: {}".format(e))
 
     def toLL(self, x, y, z=0.0):
         try:
@@ -178,7 +184,7 @@ class Navigator:
             if ret is not None:
                 return ret.ll_point
         except Exception as e:
-            print("ToLL Service call failed: %s"%e)
+            rospy.logwarn("ToLL Service call failed: {}".format(e))
 
     def publishStatus(self, heartbeat):
         if self.odometry is not None:
@@ -223,6 +229,7 @@ class Navigator:
         
     def iterate(self):
         self.helm.iterate()
+        #rospy.loginfo('nav have goal? {} have plan? {}'.format(self.goal is not None,self.plan is not None))
         if self.plan is not None:
             if rospy.Time.now()-self.plan.header.stamp > self.plan_expiration:
                 self.make_plan()
@@ -231,10 +238,7 @@ class Navigator:
                 self.helm.set_goal(closest,self.goal)
         else:
             if self.goal is not None:
-                #do we need a plan?
-                distance = self.distanceBearingFrom(self.goal)[0]
-                if distance > self.hover_radius:
-                    self.make_plan()
+                self.make_plan()
             if self.plan is None: #if we still don't have a plan, do hover
                 self.helm.set_goal(None,self.goal)
 
@@ -252,6 +256,7 @@ class Helm():
         
         self.dp_feedback = None
         self.goal = None
+        self.step_goal = None
         
         self.max_speed = 15
         self.max_acceleration = 2.5
@@ -290,14 +295,15 @@ class Helm():
     def publishStatus(self, heartbeat):
         heartbeat.values.append(KeyValue('helm mode',self.status))
         if self.dp_feedback is not None and self.status == 'dp_hover':
-            heartbeat.values.append(KeyValue('dp','range: {:.2f}, yaw err: {:.2f}'.format(self.dp_feedback.range, self.dp_feedback.yawerror)))
+            heartbeat.values.append(KeyValue('helm dp','range: {:.2f}, yaw err: {:.2f}'.format(self.dp_feedback.range, self.dp_feedback.yawerror)))
         if self.goal is not None:
             distance = self.taskManager.navigator.distanceBearingFrom(self.goal)[0]
-            heartbeat.values.append(KeyValue('goal distance',str(distance)))
+            heartbeat.values.append(KeyValue('helm goal distance',str(distance)))
         if self.piloting_mode is not None:
-            heartbeat.values.append(KeyValue('piloting mode',self.piloting_mode))
+            heartbeat.values.append(KeyValue('helm piloting mode',self.piloting_mode))
 
     def iterate(self):
+        #rospy.loginfo('status: {} step goal? {} goal? {}'.format(self.status, self.step_goal is not None,  self.goal is not None))
         if self.goal is None:
             if self.piloting_mode != 'manual':
                 self.cmd_vel_publisher.publish(Twist())
@@ -353,6 +359,7 @@ class Helm():
                     t.linear.x = speed
                     t.angular.z = yaw_speed
                     if self.piloting_mode != 'manual':
+                        rospy.logdebug('helm cmd_vel: {} {}'.format(speed,yaw_speed))
                         self.cmd_vel_publisher.publish(t)
             else:
                 if self.status != 'dp_hover':
@@ -465,20 +472,21 @@ class Camp():
     def showPlan(self, plan):
         vizItem = GeoVizItem()
         vizItem.id = 'plan'
-        plist = GeoVizPointList()
-        plist.color.r = 0.5
-        plist.color.g = 0.7
-        plist.color.b = 0.0
-        plist.color.a = 1.0
-        plist.size = 5
-        for p in plan.poses:
-            ll = self.taskManager.navigator.toLL(p.pose.position.x,p.pose.position.y,p.pose.position.z)
-            if ll is not None:
-                gp = GeoPoint()
-                gp.latitude = ll.latitude
-                gp.longitude = ll.longitude
-                plist.points.append(gp)
-        vizItem.lines.append(plist)
+        if plan is not None:
+            plist = GeoVizPointList()
+            plist.color.r = 0.5
+            plist.color.g = 0.7
+            plist.color.b = 0.0
+            plist.color.a = 1.0
+            plist.size = 5
+            for p in plan.poses:
+                ll = self.taskManager.navigator.toLL(p.pose.position.x,p.pose.position.y,p.pose.position.z)
+                if ll is not None:
+                    gp = GeoPoint()
+                    gp.latitude = ll.latitude
+                    gp.longitude = ll.longitude
+                    plist.points.append(gp)
+            vizItem.lines.append(plist)
         self.display_publisher.publish(vizItem)
             
     def publishStatus(self):
@@ -541,7 +549,7 @@ class Lookout():
                                 P=None
                             else:
                             
-                                rospy.logdebug("pixel ray: {}".format(str(corner_ray)))
+                                #rospy.logdebug("pixel ray: {}".format(str(corner_ray)))
                                     
                                 pixel_in_camera_frame = PoseStamped()
                                 pixel_in_camera_frame.pose.position.x = corner_ray[0]
@@ -551,7 +559,7 @@ class Lookout():
                                 pixel_in_map_frame = tf2_geometry_msgs.do_transform_pose(pixel_in_camera_frame, transformation)
                                 p2 = pixel_in_map_frame.pose.position
                                 
-                                rospy.logdebug("p1: {},{},{} p2: {},{},{}".format(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z))
+                                #rospy.logdebug("p1: {},{},{} p2: {},{},{}".format(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z))
                                 
                                 u = -p1.z/(p2.z-p1.z)
                                 P = (p1.x+u*(p2.x-p1.x),p1.y+u*(p2.y-p1.y),0.0)
@@ -601,12 +609,12 @@ class StationKeepingTask():
 
     def publishStatus(self, heartbeat):
         if self.goal is not None:
-            heartbeat.values.append(KeyValue('goal', '{:.1f}, {:.1f}'.format(self.goal.position.x, self.goal.position.y)))
+            heartbeat.values.append(KeyValue('task goal', '{:.1f}, {:.1f}'.format(self.goal.position.x, self.goal.position.y)))
             
         if self.pose_error is not None:
-            heartbeat.values.append(KeyValue('pose_error',str(self.pose_error)))
+            heartbeat.values.append(KeyValue('task pose_error',str(self.pose_error)))
         if self.rms_error is not None:
-            heartbeat.values.append(KeyValue('rms_error',str(self.rms_error)))
+            heartbeat.values.append(KeyValue('task rms_error',str(self.rms_error)))
 
     def iterate(self):
         pass
@@ -653,14 +661,14 @@ class WayfindingTask():
         self.mean_error = data.data
 
     def publishStatus(self, heartbeat):
-        heartbeat.values.append(KeyValue('wayfinding status',self.status))
+        heartbeat.values.append(KeyValue('task status',self.status))
         if self.current_waypoint is not None:
-            heartbeat.values.append(KeyValue('current_waypoint',str(self.current_waypoint)))
+            heartbeat.values.append(KeyValue('task current_waypoint',str(self.current_waypoint)))
         if self.min_errors is not None:
             for i in range(len(self.min_errors)):
-                heartbeat.values.append(KeyValue('min_error_'+str(i),str(self.min_errors[i])))
+                heartbeat.values.append(KeyValue('task min_error_'+str(i),str(self.min_errors[i])))
         if self.mean_error is not None:
-            heartbeat.values.append(KeyValue('mean_error',str(self.mean_error)))
+            heartbeat.values.append(KeyValue('task mean_error',str(self.mean_error)))
         
 
     def pickNextWaypoint(self):
@@ -766,7 +774,7 @@ class PerceptionTask():
         
 
     def publishStatus(self, heartbeat):
-        heartbeat.values.append(KeyValue('perception status',self.status))
+        heartbeat.values.append(KeyValue('task status',self.status))
 
 class PerceptionTarget():
     def __init__(self):
@@ -803,7 +811,7 @@ class PerceptionTarget():
             if prob > ret_score:
                 ret_score = prob
                 ret = c
-        print ret, ret_score, self.x, self.y
+        rospy.logdebug('class {}, score {}, position {},{}').format(ret, ret_score, self.x, self.y)
         return ret
         
         
@@ -831,8 +839,8 @@ class GymkhanaTask():
         if self.status == 'find starting gate':
             gate = self.findGate(('surmark46104',))
             if gate is not None:
-                print 'found it!'
-                print gate
+                rospy.loginfo('found starting gate!')
+                rospy.loginfo(gate)
                 self.taskManager.camp.markTargets((gate.left_target, gate.right_target))
                 self.seen_gates.append(gate)
                 staging_pose = gate.getCenterOffsetPose(-5)
@@ -859,7 +867,7 @@ class GymkhanaTask():
         return ret
 
     def publishStatus(self, heartbeat):
-        heartbeat.values.append(KeyValue('gymkhana status',self.status))
+        heartbeat.values.append(KeyValue('task status',self.status))
 
     def targets_detected(self, detected_targets):
         self.detected_targets = detected_targets
@@ -884,7 +892,7 @@ class GymkhanaTask():
                 for potential_right in self.detected_targets:
                     if potential_right['class'] in ('surmark950410','red_totem','buoy_red'):
                         distance = self.distanceBetweenTargets(potential_left, potential_right)
-                        print '  distance:',distance, potential_left['class'],potential_left['position'],potential_right['class'],potential_right['position']
+                        #rospy.logdebug('  distance: {}, left {} {}, right {} {}'.format(distance, potential_left['class'],potential_left['position'],potential_right['class'],potential_right['position']))
                         if distance is not None and distance < self.max_gate_separation+self.fudge_factor and distance > self.min_gate_separation-self.fudge_factor:
                             return Gate(potential_left,potential_right)
                             
@@ -952,9 +960,9 @@ class SonarGuy():
                 self.taskManager.camp.markPinger(pinger_location[pinger],pinger)
 
 
-print 'sleeping to let things settle down'
+rospy.loginfo('sleeping to let things settle down')
 rospy.sleep(2)
-print 'awake now!'
+rospy.loginfo('awake now!')
 rospy.init_node('vorc_task_manager') #, log_level=rospy.DEBUG)
 
 
@@ -1141,7 +1149,7 @@ def pinger_callback(data):
     try:
         transformation = taskManager.navigator.tf_buffer.lookup_transform('map', data.header.frame_id, data.header.stamp, rospy.Duration(1.0))
     except Exception as e: #(tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-        print 'pinger callback transformation exception:',e
+        rospy.logwarn('pinger callback transformation exception: {}'.format(e))
     else:
         v = Vector3Stamped()
         v.vector.x = data.range

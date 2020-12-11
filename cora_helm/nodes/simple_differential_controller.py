@@ -50,6 +50,7 @@ angular_pid = pid_controller.PID( Kp=angularPID_Kp, Ki=angularPID_Ki ,Kd=angular
 linearR_pid = pid_controller.PID( Kp=linearPID_Kp, Ki=linearPID_Ki, Kd=linearPID_Kd, windup_limit=linearPID_windup )
 
 def cmd_callback(data):
+    rospy.logdebug(data._connection_header['topic']+' from '+data._connection_header['callerid'])
     global last_command
     global last_command_time
 
@@ -163,5 +164,10 @@ if __name__ == '__main__':
     rospy.Subscriber('odom',Odometry,odom_callback)
     
     differential_pub = rospy.Publisher('differential_drive', DifferentialDrive, queue_size=1)
+    
+    linearLdebug = pid_controller.RosDebugHelper(linearL_pid, '/simple_differential_controller/pid_debug/linearL/')
+    linearRdebug = pid_controller.RosDebugHelper(linearR_pid, '/simple_differential_controller/pid_debug/linearR/')
+    angular_debug =  pid_controller.RosDebugHelper(angular_pid, '/simple_differential_controller/pid_debug/angular/')
+    
     
     rospy.spin()

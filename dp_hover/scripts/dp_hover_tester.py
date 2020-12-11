@@ -24,7 +24,11 @@ def test_client(x,y,yaw):
 
     print("sending:")
     print(target)
-    goal = dp_hover.msg.dp_hoverGoal(target)
+    
+    goal = dp_hover.msg.dp_hoverGoal()
+    goal.target = target
+    goal.yaw_control = False
+    
     client.send_goal(goal)
     print("waiting for result.")
     client.wait_for_result()
