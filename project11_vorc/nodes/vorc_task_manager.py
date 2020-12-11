@@ -118,7 +118,7 @@ class Navigator:
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
         
-        self.waypoint_capture_distance = 5.0
+        self.waypoint_capture_distance = 7.5
         self.waypoint_escape_distance = 7.5
         self.plan_expiration = rospy.Duration(1.0)
     
@@ -350,7 +350,11 @@ class Helm():
                     speed = max(0,speed) #don't try reverse if transiting
                     
                     if overall_distance < 25: # slow down more if getting close
-                        speed *= 0.25
+                        speed *= 0.5
+
+                    if overall_distance < 15: # slow down even more
+                        speed -= abs(yaw_speed*2)
+
                     
                     #print 'sugg yaw:', suggested_yaw, 'relative:', relative_bearing, 'speed:', speed, 'yaw rate:', yaw_speed
                     t = Twist()
@@ -499,6 +503,7 @@ class Camp():
         self.display_publisher.publish(vizItem)
 
     def showPlan(self, plan):
+        return
         vizItem = GeoVizItem()
         vizItem.id = 'plan'
         if plan is not None:
@@ -662,7 +667,7 @@ class WayfindingTask():
         self.mean_error = None
         self.current_waypoint = None
         self.reached_current_waypoint_time = None
-        self.distance_considered_reached = 5
+        self.distance_considered_reached = 7.5
         self.waypoint_dwell_time = rospy.Duration(10)
         self.status = 'idle'
         self.yaw_control = True
@@ -759,6 +764,7 @@ class PerceptionTask():
                 landmark.pose.position.latitude = ll.latitude
                 landmark.pose.position.longitude = ll.longitude
                 self.landmark_publisher.publish(landmark)
+                rospy.loginfo('reporting: {}'.format(landmark))
         self.status = 'reported'
                 
     def iterate(self):
@@ -844,7 +850,7 @@ class PerceptionTarget():
             if prob > ret_score:
                 ret_score = prob
                 ret = c
-        rospy.logdebug('class {}, score {}, position {},{}').format(ret, ret_score, self.x, self.y)
+        rospy.logdebug('class {}, score {}, position {},{}'.format(ret, ret_score, self.x, self.y))
         return ret
         
         

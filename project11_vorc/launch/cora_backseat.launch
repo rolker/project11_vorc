@@ -5,7 +5,7 @@
     <arg name="perception" default="true" />
     <arg name="rqt" default="false"/>
     <arg name="camp" default="false" />
-    <arg name="simpler" default="false"/>
+    <arg name="simpler" default="true"/>
     <arg name="gui" default="false"/>
 
     <include file="$(find project11_vorc)/launch/localization.launch"/>
