@@ -29,6 +29,7 @@ xacro_add_files(
   worlds/perception.world.xacro
   worlds/station_keeping.world.xacro
   worlds/gymkhana_gates_example_VES.world.xacro
+  worlds/marina_1_CM.world.xacro
   INORDER INSTALL DESTINATION worlds
 )
 
