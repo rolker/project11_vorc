@@ -436,16 +436,16 @@ class Camp():
             vizItem.point_groups.append(pgroup)
         self.display_publisher.publish(vizItem)
         
-    def markGate(self, gate):
+    def markGate(self, gate, label = 'gate', r=0.8, g=1.0, b=0.8):
         vizItem = GeoVizItem()
-        vizItem.id = 'gate'
+        vizItem.id = label
         
         if gate is not None:
 
             plist = GeoVizPointList()
-            plist.color.r = 0.8
-            plist.color.g = 0.99
-            plist.color.b = 0.8
+            plist.color.r = r
+            plist.color.g = g
+            plist.color.b = b
             plist.color.a = 1.0
             plist.size = 3.0
 
@@ -568,6 +568,7 @@ class Lookout():
 
             for bb in data.bounding_boxes:
                 target = {'class':bb.Class, 'probability':bb.probability, 'corners':[], 'timestamp':data.image_header.stamp}
+                target['pixel_width'] = bb.xmax-bb.xmin
                 if self.left_camera_model is not None:
                     for corner in ((bb.xmax,bb.ymax),(bb.xmax,bb.ymin),(bb.xmin,bb.ymin),(bb.xmin,bb.ymax), (bb.xmin+(bb.xmax-bb.xmin)/2.0,bb.ymax)): #quick hack, last is bottom middle used as position
                         try:
@@ -839,6 +840,11 @@ class PerceptionTarget():
         dy = t['position'][1]-self.y
         return dx*dx+dy*dy
 
+    def distanceToPerceptionTarget(self, t):
+        dx = t.x - self.x
+        dy = t.y = self.y
+        return math.sqrt(dx*dx+dy*dy)
+
     def bestClass(self):
         ret = ''
         ret_score = 0
@@ -853,7 +859,11 @@ class PerceptionTarget():
         rospy.logdebug('class {}, score {}, position {},{}'.format(ret, ret_score, self.x, self.y))
         return ret
         
+    def __str__(self):
+        return '{c}: ({x:.3f},{y:.3f})'.format(c=self.bestClass(),x=self.x,y=self.y)
         
+    def __repr__(self):
+        return self.__str__()
 
 #
 # Task 4 - Black box search (gymkhana)
@@ -866,11 +876,13 @@ class GymkhanaTask():
         self.yaw_control = False
     
         self.gates = GateManager()
+        self.markers = MarkerManager()
         
         self.taskManager.navigator.helm.max_speed = 5.0
 
     def iterate(self):
         self.pinger.iterate()
+        self.markers.sendToCamp(self.taskManager.camp)
         
         our_position = self.taskManager.navigator.pose
         self.gates.updatePosition(our_position)
@@ -932,6 +944,8 @@ class GymkhanaTask():
 
     def targets_detected(self, detected_targets):
         self.gates.findGates(detected_targets)
+        self.markers.addTargets(detected_targets)
+        self.markers.findGates()
 
 
 class MarkerManager():
@@ -939,32 +953,65 @@ class MarkerManager():
         self.markers = []
         self.radius_to_deem_same = 10.0
         self.radius_squared = self.radius_to_deem_same*self.radius_to_deem_same
+        self.gates = None
 
     def addTargets(self, targets):
-        new_markers = []
-        for t in targets:
-            added = False
-            for m in self.markers:
-                if m.distanceSquared(t) < self.radius_squared:
-                    m.addDetection(t)
-                    added = True
-                    break
-            if not added:
-                pt = PerceptionTarget()
-                pt.addDetection(t)
-                new_markers.append(pt)
-        for nm in new_markers:
-            self.markers.append(nm)
+        if targets is not None:
+            new_markers = []
+            for t in targets:
+                if t['class'] in Gate.left_all or t['class'] in Gate.right_all:
+                    if t['pixel_width'] >= 15:
+                        added = False
+                        for m in self.markers:
+                            print m, '{}:, ({},{}) pw:{}'.format(t['class'], t['position'][0],t['position'][1],t['pixel_width'])
+                            print 'd2:',m.distanceSquared(t)
+                            if m.distanceSquared(t) < self.radius_squared:
+                                m.addDetection(t)
+                                added = True
+                                print 'added!'
+                                break
+                        if not added:
+                            pt = PerceptionTarget()
+                            pt.addDetection(t)
+                            new_markers.append(pt)
+            for nm in new_markers:
+                self.markers.append(nm)
+        print self.markers
             
-    
+    def findGates(self):
+        gates = []
+        left_candidates = []
+        for i in range(len(self.markers)):
+            m = self.markers[i]
+            if m.bestClass() in Gate.left_all:
+                left_candidates.append(i)
+        for potential_left in left_candidates:
+            pl = self.markers[potential_left]
+            for potential_right in range(len(self.markers)):
+                pr = self.markers[potential_right]
+                if pr.bestClass() in Gate.right_all:
+                    distance = pl.distanceToPerceptionTarget(pr)
+                    if distance is not None and distance < GateManager.max_gate_separation+GateManager.fudge_factor and distance > GateManager.min_gate_separation-GateManager.fudge_factor:
+                        gates.append((potential_left,potential_right))
+        self.gates = gates
+        print 'gates:',gates
+        
+    def sendToCamp(self, camp):
+        if self.gates is not None:
+            for g in self.gates:
+                lm = self.markers[g[0]]
+                rm = self.markers[g[1]]
+                gng = GateNG((lm.x, lm.y, 0),(rm.x, rm.y, 0))
+                camp.markGate(gng, 'gate_{}_{}'.format(g[0],g[1]), 0.5, 0.5, 0.5)
             
     
 
 class GateManager():
+    max_gate_separation = 25
+    min_gate_separation = 15
+    fudge_factor = 1
+
     def __init__(self):
-        self.max_gate_separation = 25
-        self.min_gate_separation = 15
-        self.fudge_factor = 1
 
         self.current_gate = None
 
@@ -1047,7 +1094,11 @@ class GateManager():
             dy = p2[1] - p1[1]
             return math.sqrt(dx*dx + dy*dy)
         
-                            
+class GateNG:
+    def __init__(self,left_position, right_position):
+        self.left_position = left_position
+        self.right_position = right_position
+    
 class Gate():
     left_start = 'surmark46104' #white
     left_finish = 'blue_totem'
