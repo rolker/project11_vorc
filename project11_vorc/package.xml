@@ -12,13 +12,18 @@
   <depend>project11</depend>
   <depend>rospy</depend>
   <depend>vrx_gazebo</depend>
+  <depend>vorc_gazebo</depend>
   <depend>geographic_msgs</depend>
   <depend>marine_msgs</depend>
   <depend>robot_localization</depend>
+  <depend>xacro</depend>
+  
+  <exec_depend>gazebo_ros</exec_depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
-    <!-- Other tools can request additional information be placed here -->
-
+    <gazebo_ros gazebo_model_path="${prefix}/models"/>
+    <gazebo_ros gazebo_media_path="${prefix}"/>
+    <gazebo_ros plugin_path="${prefix}/../../lib"/>
   </export>
 </package>
