@@ -242,6 +242,10 @@ class Navigator:
             if self.plan is None: #if we still don't have a plan, do hover
                 self.helm.set_goal(None,self.goal)
 
+    def search(self):
+        self.helm.status = 'search'
+        
+
 class Helm():
     def __init__(self, taskManager):
         self.taskManager = taskManager
@@ -306,11 +310,20 @@ class Helm():
         #rospy.loginfo('status: {} step goal? {} goal? {}'.format(self.status, self.step_goal is not None,  self.goal is not None))
         if self.goal is None:
             if self.piloting_mode != 'manual':
-                self.cmd_vel_publisher.publish(Twist())
+                if self.status == 'search':
+                    t = Twist()
+                    t.linear.x = .1
+                    t.angular.z = .25
+                    self.cmd_vel_publisher.publish(t)
+                else:
+                    self.cmd_vel_publisher.publish(Twist())
             if self.status == 'dp_hover':
                 self.dp_hover_action_client.cancel_goal()
-            self.status = 'idle'
+            else:
+                self.status = 'idle'
         else:
+            if self.status == 'search':
+                self.status = 'idle'
             if self.step_goal is not None:
                 if self.status == 'dp_hover':
                     self.dp_hover_action_client.cancel_goal()
@@ -876,13 +889,17 @@ class GymkhanaTask():
         self.yaw_control = False
     
         self.gates = GateManager()
-        self.markers = MarkerManager()
+        #self.markers = MarkerManager()
         
         self.taskManager.navigator.helm.max_speed = 5.0
 
     def iterate(self):
         self.pinger.iterate()
-        self.markers.sendToCamp(self.taskManager.camp)
+        #self.markers.sendToCamp(self.taskManager.camp)
+
+        for i in range(len(self.gates.gates)):
+            self.taskManager.camp.markGate(self.gates.gates[i],'gate_{}'.format(i),0.5,0.5,0.5)
+
         
         our_position = self.taskManager.navigator.pose
         self.gates.updatePosition(our_position)
@@ -897,6 +914,8 @@ class GymkhanaTask():
                 self.taskManager.navigator.set_goal(staging_pose)
                 self.status = 'stage for start'
                 return
+            else:
+                self.taskManager.navigator.search()
             
         if self.status == 'stage for start':
             # make sure we don't jump the start!
@@ -944,8 +963,8 @@ class GymkhanaTask():
 
     def targets_detected(self, detected_targets):
         self.gates.findGates(detected_targets)
-        self.markers.addTargets(detected_targets)
-        self.markers.findGates()
+        #self.markers.addTargets(detected_targets)
+        #self.markers.findGates()
 
 
 class MarkerManager():
@@ -1053,15 +1072,16 @@ class GateManager():
         
     def findGates(self, targets):
         gates = []
+        min_pixel_width = 6
         if targets is not None:
             left_candidates = []
             for target in targets:
-                if target['class'] in Gate.left_all:
+                if target['class'] in Gate.left_all and target['pixel_width'] >= min_pixel_width:
                     left_candidates.append(target)
             #print 'left candidates',left_candidates
             for potential_left in left_candidates:
                 for potential_right in targets:
-                    if potential_right['class'] in Gate.right_all:
+                    if potential_right['class'] in Gate.right_all and potential_right['pixel_width'] >= min_pixel_width:
                         distance = self.distanceBetweenTargets(potential_left, potential_right)
                         #rospy.logdebug('  distance: {}, left {} {}, right {} {}'.format(distance, potential_left['class'],potential_left['position'],potential_right['class'],potential_right['position']))
                         if distance is not None and distance < self.max_gate_separation+self.fudge_factor and distance > self.min_gate_separation-self.fudge_factor:
@@ -1225,8 +1245,9 @@ class SonarGuy():
 
     def iterate(self):
         if pinger_location is not None:
-            for pinger in pinger_location:
-                self.taskManager.camp.markPinger(pinger_location[pinger],pinger)
+            pass
+            #for pinger in pinger_location:
+            #    self.taskManager.camp.markPinger(pinger_location[pinger],pinger)
 
 
 rospy.loginfo('sleeping to let things settle down')
