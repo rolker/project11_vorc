@@ -96,6 +96,14 @@
       <pose>400 -578 1 0 0 0</pose>
       <uri>model://buoy_red</uri>
     </include>
+
+
+    <!-- Navigation course #1 for testing -->
+    <include>
+      <name>course_1</name>
+      <uri>model://course_1</uri>
+      <pose>100 -362 0 0 0 3.55</pose>
+    </include>
     
   </world>
 </sdf>
