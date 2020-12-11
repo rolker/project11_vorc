@@ -437,30 +437,32 @@ class Camp():
     def markGate(self, gate):
         vizItem = GeoVizItem()
         vizItem.id = 'gate'
+        
+        if gate is not None:
 
-        plist = GeoVizPointList()
-        plist.color.r = 0.8
-        plist.color.g = 0.99
-        plist.color.b = 0.8
-        plist.color.a = 1.0
-        plist.size = 3.0
+            plist = GeoVizPointList()
+            plist.color.r = 0.8
+            plist.color.g = 0.99
+            plist.color.b = 0.8
+            plist.color.a = 1.0
+            plist.size = 3.0
 
-        lp = gate.left_position
-        ll = self.taskManager.navigator.toLL(lp[0],lp[1],lp[2])
-        if ll is not None:
-            gp = GeoPoint()
-            gp.latitude = ll.latitude
-            gp.longitude = ll.longitude
-            plist.points.append(gp)
-            rp = gate.right_position
-            ll = self.taskManager.navigator.toLL(rp[0],rp[1],rp[2])
+            lp = gate.left_position
+            ll = self.taskManager.navigator.toLL(lp[0],lp[1],lp[2])
             if ll is not None:
                 gp = GeoPoint()
                 gp.latitude = ll.latitude
                 gp.longitude = ll.longitude
                 plist.points.append(gp)
-                vizItem.lines.append(plist)
-        self.display_publisher.publish(vizItem)
+                rp = gate.right_position
+                ll = self.taskManager.navigator.toLL(rp[0],rp[1],rp[2])
+                if ll is not None:
+                    gp = GeoPoint()
+                    gp.latitude = ll.latitude
+                    gp.longitude = ll.longitude
+                    plist.points.append(gp)
+                    vizItem.lines.append(plist)
+            self.display_publisher.publish(vizItem)
         
 
     def markPinger(self, pinger, label):
