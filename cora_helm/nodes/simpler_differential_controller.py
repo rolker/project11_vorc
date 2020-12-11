@@ -26,6 +26,7 @@ max_angular_speed = 0.39
 linear_pid  = pid_controller.PID( Kp=0.25, Ki=0.2, Kd=0.01, windup_limit=0.5 )
 angular_pid = pid_controller.PID( Kp=3,   Ki=0.4 ,Kd=0.0,  windup_limit=5 )
 
+
 linear_pid.lower_limit = -1.0
 linear_pid.upper_limit = 1.0
 
@@ -85,37 +86,6 @@ def odom_callback(data):
         linear_odom_buffer = []
         angular_odom_buffer = []
 
-def linear_debug_callback(data):
-    ld_p_pub.publish(data['p'])
-    ld_i_pub.publish(data['i'])
-    ld_d_pub.publish(data['d'])
-    ld_error_pub.publish(data['error'])
-    ld_integral_pub.publish(data['integral'])
-
-ld_p_pub = rospy.Publisher('/simpler_differential_controller/linear_pid/p', Float32, queue_size=1)
-ld_i_pub = rospy.Publisher('/simpler_differential_controller/linear_pid/i', Float32, queue_size=1)
-ld_d_pub = rospy.Publisher('/simpler_differential_controller/linear_pid/d', Float32, queue_size=1)
-ld_error_pub = rospy.Publisher('/simpler_differential_controller/linear_pid/error', Float32, queue_size=1)
-ld_integral_pub = rospy.Publisher('/simpler_differential_controller/linear_pid/integral', Float32, queue_size=1)
-
-linear_pid.debug_callback = linear_debug_callback
-
-def angular_debug_callback(data):
-    ad_p_pub.publish(data['p'])
-    ad_i_pub.publish(data['i'])
-    ad_d_pub.publish(data['d'])
-    ad_error_pub.publish(data['error'])
-    ad_integral_pub.publish(data['integral'])
-
-ad_p_pub = rospy.Publisher('/simpler_differential_controller/angular_pid/p', Float32, queue_size=1)
-ad_i_pub = rospy.Publisher('/simpler_differential_controller/angular_pid/i', Float32, queue_size=1)
-ad_d_pub = rospy.Publisher('/simpler_differential_controller/angular_pid/d', Float32, queue_size=1)
-ad_error_pub = rospy.Publisher('/simpler_differential_controller/angular_pid/error', Float32, queue_size=1)
-ad_integral_pub = rospy.Publisher('/simpler_differential_controller/angular_pid/integral', Float32, queue_size=1)
-
-angular_pid.debug_callback = angular_debug_callback
-
-    
 if __name__ == '__main__':
     rospy.init_node('simpler_differential_controller')
     
@@ -123,5 +93,7 @@ if __name__ == '__main__':
     rospy.Subscriber('odom',Odometry,odom_callback)
     
     differential_pub = rospy.Publisher('differential_drive', DifferentialDrive, queue_size=1)
-    
+
+    linear_debug = pid_controller.RosDebugHelper(linear_pid, '/simpler_differential_controller/pid_debug/linear/')
+    angular_debug =  pid_controller.RosDebugHelper(angular_pid, '/simpler_differential_controller/pid_debug/angular/')
     rospy.spin()
