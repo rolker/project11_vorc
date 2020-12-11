@@ -425,6 +425,8 @@ public:
     
     void sendDisplay()
     {
+        return; //disable this for the challenge
+        
         geographic_visualization_msgs::GeoVizItem vizItem;
         vizItem.id = "DP_hover";
         
