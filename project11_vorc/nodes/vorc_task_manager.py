@@ -866,6 +866,8 @@ class GymkhanaTask():
         self.yaw_control = False
     
         self.gates = GateManager()
+        
+        self.taskManager.navigator.helm.max_speed = 5.0
 
     def iterate(self):
         self.pinger.iterate()
@@ -931,6 +933,32 @@ class GymkhanaTask():
     def targets_detected(self, detected_targets):
         self.gates.findGates(detected_targets)
 
+
+class MarkerManager():
+    def __init__(self):
+        self.markers = []
+        self.radius_to_deem_same = 10.0
+        self.radius_squared = self.radius_to_deem_same*self.radius_to_deem_same
+
+    def addTargets(self, targets):
+        new_markers = []
+        for t in targets:
+            added = False
+            for m in self.markers:
+                if m.distanceSquared(t) < self.radius_squared:
+                    m.addDetection(t)
+                    added = True
+                    break
+            if not added:
+                pt = PerceptionTarget()
+                pt.addDetection(t)
+                new_markers.append(pt)
+        for nm in new_markers:
+            self.markers.append(nm)
+            
+    
+            
+    
 
 class GateManager():
     def __init__(self):
