@@ -19,7 +19,7 @@
   <arg name="joy" default="false"/>
 
   <!-- Initial USV location and attitude-->
-  <arg name="x" default="10" />
+  <arg name="x" default="-20" />
   <arg name="y" default="-372" />
   <arg name="z" default="0.1" />
   <arg name="P" default="0" />

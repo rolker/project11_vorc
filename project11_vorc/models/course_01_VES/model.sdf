@@ -6,7 +6,7 @@
     <!-- Start gates. -->
     <include>
       <name>start_gates_0</name>
-      <pose>-30 0 0 0 0 -3.14159</pose>
+      <pose>-10 0 0 0 0 -3.14159</pose>
       <uri>model://start_gates_0</uri>
     </include>
     
