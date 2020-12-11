@@ -42,6 +42,7 @@ print("Setting Initial Angular Kp:%0.2f" % angularPID_Kp)
 print("Setting Initial Angular Ki: %0.2f" % angularPID_Ki)
 print("Setting Initial Angular Kd: %0.2f" % angularPID_Kd)
 print("Setting Initial Angular windup: %0.2f" % angularPID_windup)
+print("Enable angular PID: {}".format(enableAngularPIDControl))
 
 #linear_pid = pid_controller.PID( Kp=0.3, Ki=.05, Kd=0.0, windup_limit=10 )
 #angular_pid = pid_controller.PID( Kp=100, Ki=10 ,Kd=0.0, windup_limit=50 )
@@ -82,7 +83,7 @@ def odom_callback(data):
         angularPID_Ki = rospy.get_param('/simple_differential_controller/angularPID_Ki')
         angularPID_Kd = rospy.get_param('/simple_differential_controller/angularPID_Kd')
         angularPID_windup = rospy.get_param('/simple_differential_controller/angularPID_windup')
-        enableAngularPIDControl = rospy.get_param('/simple_differential_controller/enableAngularPID')
+        enableAngularPIDControl = rospy.get_param('/simple_differential_controller/enableAngularPID', enableAngularPIDControl)
 
         '''
         rospy.loginfo("Setting Initial Linear Kp:%0.2f" % linearPID_Kp)

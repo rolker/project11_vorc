@@ -345,14 +345,12 @@ class Helm():
                         yaw_speed = relative_bearing*0.75 
                         self.uturn_direction = None
                     
-                    slow_down_because_of_turning_factor = 1.0-abs(relative_bearing)/math.pi
-                    if abs(relative_bearing) > math.pi/4.0: # slow down even more if turning more than 45 degs
-                        slow_down_because_of_turning_factor = 0.0
+                    slow_down_because_of_turning_factor = 1.0-abs(relative_bearing)*2
                     speed = max(-self.max_speed,min(self.max_speed,0.2*overall_distance))*slow_down_because_of_turning_factor
                     speed = max(0,speed) #don't try reverse if transiting
                     
                     if overall_distance < 25: # slow down more if getting close
-                        speed *= 0.5
+                        speed *= 0.25
                     
                     #print 'sugg yaw:', suggested_yaw, 'relative:', relative_bearing, 'speed:', speed, 'yaw rate:', yaw_speed
                     t = Twist()
@@ -718,6 +716,10 @@ class WayfindingTask():
         if self.waypoints is not None and len(self.waypoints):
             if self.current_waypoint is None:
                 self.pickNextWaypoint()
+
+            # reset dwell time if not running yet
+            if self.status == 'dwell' and self.taskManager.task_info.state != 'running':
+                self.reached_current_waypoint_time = rospy.Time().now()
                 
             if self.reached_current_waypoint_time is None:
                 self.status = 'transit'
