@@ -5,6 +5,7 @@ find_package(catkin REQUIRED COMPONENTS
     project11
     rospy
     vrx_gazebo
+    vorc_gazebo
     geographic_msgs
     marine_msgs
     robot_localization

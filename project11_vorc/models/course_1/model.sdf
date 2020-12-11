@@ -1,0 +1,85 @@
+<?xml version="1.0"?>
+<!-- Model for the test navigation course - 1 -->
+<sdf version="1.6">
+  <model name="course_1">
+
+    <!-- Starboard_border -->
+    <include>
+      <name>red_bound_0</name>
+      <pose>0 0 0 0 0 0</pose>
+      <uri>model://surmark950410</uri>
+    </include>
+
+    <include>
+      <name>red_bound_1</name>
+      <pose>-30 -30 0 0 0 0</pose>
+      <uri>model://red_totem</uri>
+    </include>
+
+    <include>
+      <name>red_bound_2</name>
+      <pose>-50 -5 0 0 0 0</pose>
+      <uri>model://buoy_red</uri>
+    </include>
+
+    <include>
+      <name>red_bound_3</name>
+      <pose>-100 15 0 0 0 0</pose>
+      <uri>model://surmark950410</uri>
+    </include>
+
+    <!-- Port_border -->
+    <include>
+      <name>green_bound_0</name>
+      <pose>0 -20 0.2 0 0 0</pose>
+      <uri>model://surmark46104</uri>
+    </include>
+
+    <include>
+      <name>green_bound_1</name>
+      <pose>-30 -45 0.2 0 0 0</pose>
+      <uri>model://surmark950400</uri>
+    </include>
+
+    <include>
+      <name>green_bound_2</name>
+      <pose>-65 -15 0.2 0 0 0</pose>
+      <uri>model://blue_totem</uri>
+    </include>
+ 
+    <include>
+      <name>green_bound_3</name>
+      <pose>-85 5 0.2 0 0 0</pose>
+      <uri>model://green_totem</uri>
+    </include>
+
+    <include>
+      <name>polyform_a7_0</name>
+      <pose>-65 2 0.0 0 0 0 </pose>
+      <uri>model://polyform_a7</uri>
+    </include>
+
+    <!-- The obstacle course -->
+    <include>
+      <name>obstacles_1</name>
+      <uri>model://obstacle_course</uri>
+      <pose>-90 0 0 0 0 2.5</pose>
+    </include>
+
+    <!-- The obstacle course -->
+    <include>
+      <name>obstacles_2</name>
+      <uri>model://obstacle_course</uri>
+      <pose>-110 -10 0 0 0 3</pose>
+    </include>
+
+    <!-- The obstacle course -->
+    <include>
+      <name>obstacles_3</name>
+      <uri>model://obstacle_course</uri>
+      <pose>-130 -35 0 0 0 2</pose>
+    </include>
+
+  </model>
+
+</sdf>
