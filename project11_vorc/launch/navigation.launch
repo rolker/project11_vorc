@@ -9,7 +9,7 @@
         <remap from="cloud_in" to="/cora/sensors/lidars/front_lidar/points_filtered"/>
         <param name="resolution" value="1.0"/>
     </node>
-    <node pkg="rosservice" type="rosservice" name="set_octomap_log_level" args="call --wait /octomap/set_logger_level 'ros' 'error'" />-->
+    <node pkg="rosservice" type="rosservice" name="set_octomap_log_level" args="call - -wait /octomap/set_logger_level 'ros' 'error'" />-->
 
 <!--    <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pc_to_laserscan">
         <remap from="cloud_in" to="/cora/sensors/lidars/front_lidar/points_filtered"/>
