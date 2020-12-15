@@ -23,6 +23,7 @@ from nav_msgs.msg import Odometry
 from darknet_ros_msgs.msg import BoundingBoxes
 from sensor_msgs.msg import CameraInfo
 from usv_msgs.msg import RangeBearing
+from task_manager_utilities.tsp import two_opt
 
 import numpy as np
 import math
@@ -678,12 +679,38 @@ class WayfindingTask():
 
     def waypoints_callback(self, data):
         self.waypoints = []
+        # The TSP solution assumes a fixed start point, so 
+        # seed the TSP path with the current position.
+        if self.taskManager.navigator.odometry is not None:
+            o = self.taskManager.navigator.odometry 
+            xs = [o.pose.pose.position.x]
+            ys = [o.pose.pose.position.y]
+        
         for i in range(len(data.poses)):
             self.taskManager.camp.markWaypoint(data.poses[i].pose.position, 'waypoint_'+str(i))
             p = Pose();
             p.position = self.taskManager.navigator.fromLL(data.poses[i].pose.position.latitude, data.poses[i].pose.position.longitude, data.poses[i].pose.position.altitude)
             p.orientation = data.poses[i].pose.orientation
             self.waypoints.append(p)
+            xs.append(p.position.x)
+            ys.append(p.position.y)
+            
+        # Traveling salesman solution.
+        rospy.loginfo('Starting TSP Solution')
+        idx = two_opt(xs,ys,0.05)
+        rospy.loginfo("TSP Soln: %s" % ",".join([str(s) for s in idx]))
+        # NOTE: This is subtle. We want a TSP solution that starts at our 
+        # current location and doesn't arbitrarily start at the first point in 
+        # our list (which is how our TSP algorithm works). So we seed the list of points to
+        # visit with our current position (above).
+        # But there is a chance we will visit all the points and want to repeat the 
+        # TSP path. In that case we don't want to include our currnet position in the
+        # path because it's not actually a point we've been tasked to visit. So this
+        # next step, select waypoints omitting the first one, which is our current 
+        # position, and since we had too many to begin with, adjusts the indices by 1.
+        self.waypoints = [self.waypoints[i] for i in (idx[1:]-1)]
+
+        
         if len(self.waypoints) == 0:
             self.current_waypoint = None
 
