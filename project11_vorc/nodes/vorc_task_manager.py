@@ -24,6 +24,7 @@ from darknet_ros_msgs.msg import BoundingBoxes
 from sensor_msgs.msg import CameraInfo
 from usv_msgs.msg import RangeBearing
 from task_manager_utilities.tsp import two_opt
+from project11_vorc.msg import ProximityWarning
 
 import numpy as np
 import math
@@ -107,10 +108,12 @@ class Navigator:
         
         self.helm = Helm(taskManager)
         
+        self.proximity_warning = None
+        
         rospy.Subscriber('/cora/robot_localization/odometry/filtered', Odometry, self.odometry_callback)
         rospy.Subscriber('/cmd_vel', Twist, self.cmd_vel_callback)
         rospy.Subscriber('/differential_drive', DifferentialDrive, self.differential_drive_callback)
-
+        rospy.Subscriber('/proximity_warning', ProximityWarning, self.proximity_warning_callback)
 
         self.make_plan_service = rospy.ServiceProxy('/move_base/make_plan', GetPlan)#, persistent=True)
         self.fromll_service = rospy.ServiceProxy('/cora/robot_localization/fromLL', FromLL)#, persistent=True)
@@ -134,6 +137,9 @@ class Navigator:
 
     def differential_drive_callback(self, data):
         self.differential_drive = data
+        
+    def proximity_warning_callback(self, data):
+        self.proximity_warning = data
 
     def set_goal(self, goal):
         self.goal = goal
@@ -196,6 +202,10 @@ class Navigator:
             heartbeat.values.append(KeyValue('cmd_vel','{:.2f}, {:.1f} yaw: {:.2f}'.format(self.cmd_vel.linear.x, self.cmd_vel.linear.y, self.cmd_vel.angular.z)))
         if self.differential_drive is not None:
             heartbeat.values.append(KeyValue('diff drive','l: {:.2f}, r: {:.2f}'.format(self.differential_drive.left_thrust, self.differential_drive.right_thrust)))
+            
+        if self.proximity_warning is not None and len(self.proximity_warning.data) >= 4:
+            heartbeat.values.append(KeyValue('proximity port','{:.2f}, {:.2f}'.format(self.proximity_warning.data[0].x, self.proximity_warning.data[0].y)))
+            heartbeat.values.append(KeyValue('proximity stbd','{:.2f}, {:.2f}'.format(self.proximity_warning.data[3].x, self.proximity_warning.data[3].y)))
 
         heartbeat.values.append(KeyValue('---','---'))
         self.helm.publishStatus(heartbeat)
@@ -517,7 +527,7 @@ class Camp():
         self.display_publisher.publish(vizItem)
 
     def showPlan(self, plan):
-        
+        return
         vizItem = GeoVizItem()
         vizItem.id = 'plan'
         if plan is not None:

@@ -25,6 +25,8 @@
     
     <include file="$(find project11_vorc)/launch/navigation.launch"/>
     
+    <node pkg="project11_vorc" type="proximity_warning_node.py" name="proximity_warning"/>
+    
     <include if="$(arg perception)" file="$(find project11_vorc)/launch/darknet.launch">
         <arg name="gui"     value="$(arg gui)" />
     </include>

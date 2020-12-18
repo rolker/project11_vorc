@@ -11,7 +11,7 @@ from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import Vector3
 from project11_vorc.msg import ProximityWarning
 from robot_localization.srv import *
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import numpy as np
 import time
 
