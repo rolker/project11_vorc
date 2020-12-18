@@ -17,6 +17,9 @@
   <depend>marine_msgs</depend>
   <depend>robot_localization</depend>
   <depend>xacro</depend>
+
+  <build_depend>message_generation</build_depend>
+  <exec_depend>message_runtime</exec_depend>
   
   <exec_depend>gazebo_ros</exec_depend>
 

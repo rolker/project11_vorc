@@ -10,9 +10,21 @@ find_package(catkin REQUIRED COMPONENTS
     marine_msgs
     robot_localization
     xacro
+    message_generation
 )
 
 catkin_python_setup()
+
+add_message_files(
+  FILES
+  ProximityWarning.msg
+)
+
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+  geometry_msgs
+)
 
 
 catkin_package(
