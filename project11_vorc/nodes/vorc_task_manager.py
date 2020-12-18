@@ -517,7 +517,7 @@ class Camp():
         self.display_publisher.publish(vizItem)
 
     def showPlan(self, plan):
-        return
+        
         vizItem = GeoVizItem()
         vizItem.id = 'plan'
         if plan is not None:
