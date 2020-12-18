@@ -566,6 +566,8 @@ public:
     {
         m_action_server.setPreempted();
         sendDisplay();
+        m_node_handle.setParam("/simple_differential_controller/enableAngularPID",1);
+
     }
 
     void headingCallback(const marine_msgs::NavEulerStamped::ConstPtr& msg)
