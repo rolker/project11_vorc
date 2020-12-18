@@ -11,12 +11,12 @@
   <arg name="image" default="/cora/sensors/cameras/front_left_camera/image_raw" />
 
   <!-- Include main launch file -->
-  <include file="$(find darknet_ros)/launch/darknet_ros.launch">
+<!--  <include file="$(find darknet_ros)/launch/darknet_ros.launch">
     <arg name="network_param_file"    value="$(arg network_param_file)"/>
     <arg name="image" value="$(arg image)" />
     <arg name="yolo_weights_path"          default="$(find project11_vorc)/config/"/>
     <arg name="yolo_config_path"           default="$(find project11_vorc)/config/"/>
-  </include>
+  </include>-->
 
   <arg name="gui" default="true" />
   <group if="$(arg gui)">
@@ -24,5 +24,13 @@
           <remap from="image" to="/darknet_ros/detection_image"/>
       </node>
   </group>
+  
+  
+  <rosparam command="load" ns="darknet_ros" file="$(arg network_param_file)"/>
+  <node pkg="opencv_dnn" type="opencv_dnn_node" name="darknet_ros">
+    <param name="weights_path"          value="$(find project11_vorc)/config" />
+    <param name="config_path"           value="$(find project11_vorc)/config" />
+    <remap from="camera/image_raw"  to="$(arg image)" />     
+  </node>
   
 </launch>

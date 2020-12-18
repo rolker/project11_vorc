@@ -21,7 +21,6 @@ RUN apt update \
         gdb \
         git \
         mercurial \
-        nvidia-cuda-toolkit \
         python-future \
         python-gdal \
         python-pip \
@@ -62,6 +61,7 @@ RUN /bin/sh -c 'echo "deb http://packages.ros.org/ros/ubuntu $(lsb_release -sc) 
  && apt update \
  && apt install -y \
     python-rosdep \
+    python-catkin-tools \
     qtbase5-dev \
     qtpositioning5-dev \
     libqt5svg5-dev \
@@ -146,8 +146,11 @@ RUN sudo ln -s /home/developer/.ros/log /root/.ros/log
 
 COPY --chown=developer:developer  catkin_ws/src/local/project11_vorc/docker/ros_entrypoint.sh /
 
+# install opencv (previously cmake'ed and make'd)
+RUN /bin/bash -c "cd project11/catkin_ws/src/local/opencv_dnn/opencv-build && sudo make install"
+
 # Compile the VRX project.
-RUN /bin/bash -c ". /opt/ros/${DIST}/setup.bash && cd project11/catkin_ws && catkin_make"
+RUN /bin/bash -c ". /opt/ros/${DIST}/setup.bash && cd project11/catkin_ws && catkin build"
 
 
 # Source all the needed environment files.

@@ -62,6 +62,7 @@
             /heading
             /differential_drive
             /darknet_ros/bounding_boxes
+            /darknet_ros/detection_image
             /clock
             /cmd_vel
             /vorc/station_keeping/goal

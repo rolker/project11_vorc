@@ -778,50 +778,52 @@ class PerceptionTask():
                 landmark.pose.position.latitude = ll.latitude
                 landmark.pose.position.longitude = ll.longitude
                 self.landmark_publisher.publish(landmark)
-                rospy.loginfo('reporting: {}'.format(landmark))
+                rospy.logdebug('reporting: {}'.format(landmark))
         self.status = 'reported'
                 
     def iterate(self):
         if self.status == 'accumulating':
             # accumulate for 3 seconds, to make sure we report within the 5 secd trial time
-            if rospy.Time.now() - self.targets_buffer_start_time > rospy.Duration(3): 
+            if rospy.Time.now() - self.targets_buffer_start_time > rospy.Duration(2.5): 
                 self.send_detects()
-        if self.last_detect_time is not None and rospy.Time.now() - self.last_detect_time > rospy.Duration(1):
+        if self.last_detect_time is not None and rospy.Time.now() - self.last_detect_time > rospy.Duration(2.5):
             self.targets_buffer = None
             self.targets_buffer_start_time = None
             self.status = 'waiting'
 
     def targets_detected(self, detected_targets):
-        if self.targets_buffer is None:
-            self.targets_buffer = []
-            self.targets_buffer_start_time = rospy.Time.now()
-            self.status = 'accumulating'
-            for t in detected_targets:
-                pt = PerceptionTarget()
-                pt.addDetection(t)
-                self.targets_buffer.append(pt)
-        else:
-            for t in detected_targets:
-                if len(self.targets_buffer):
-                    min_index = 0
-                    min_distance = self.targets_buffer[0].distanceSquared(t)
-                    for i in range(len(self.targets_buffer)):
-                        d = self.targets_buffer[i].distanceSquared(t)
-                        if d < min_distance:
-                            min_distance = d
-                            min_index = i
-                    if min_distance < 5:
-                        self.targets_buffer[min_index].addDetection(t)
+        #print detected_targets
+        if len(detected_targets):
+            if self.targets_buffer is None:
+                self.targets_buffer = []
+                self.targets_buffer_start_time = rospy.Time.now()
+                self.status = 'accumulating'
+                for t in detected_targets:
+                    pt = PerceptionTarget()
+                    pt.addDetection(t)
+                    self.targets_buffer.append(pt)
+            else:
+                for t in detected_targets:
+                    if len(self.targets_buffer):
+                        min_index = 0
+                        min_distance = self.targets_buffer[0].distanceSquared(t)
+                        for i in range(len(self.targets_buffer)):
+                            d = self.targets_buffer[i].distanceSquared(t)
+                            if d < min_distance:
+                                min_distance = d
+                                min_index = i
+                        if min_distance < 5:
+                            self.targets_buffer[min_index].addDetection(t)
+                        else:
+                            pt = PerceptionTarget()
+                            pt.addDetection(t)
+                            self.targets_buffer.append(pt)
                     else:
                         pt = PerceptionTarget()
                         pt.addDetection(t)
                         self.targets_buffer.append(pt)
-                else:
-                    pt = PerceptionTarget()
-                    pt.addDetection(t)
-                    self.targets_buffer.append(pt)
 
-        self.last_detect_time = rospy.Time.now()
+            self.last_detect_time = rospy.Time.now()
         
         
         
