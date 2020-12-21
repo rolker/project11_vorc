@@ -106,14 +106,15 @@ class Navigator:
         self.goal = None
         self.plan = None
         
+        self.search_center = None
+        
         self.helm = Helm(taskManager)
         
-        self.proximity_warning = None
         
         rospy.Subscriber('/cora/robot_localization/odometry/filtered', Odometry, self.odometry_callback)
         rospy.Subscriber('/cmd_vel', Twist, self.cmd_vel_callback)
         rospy.Subscriber('/differential_drive', DifferentialDrive, self.differential_drive_callback)
-        rospy.Subscriber('/proximity_warning', ProximityWarning, self.proximity_warning_callback)
+
 
         self.make_plan_service = rospy.ServiceProxy('/move_base/make_plan', GetPlan)#, persistent=True)
         self.fromll_service = rospy.ServiceProxy('/cora/robot_localization/fromLL', FromLL)#, persistent=True)
@@ -138,9 +139,6 @@ class Navigator:
     def differential_drive_callback(self, data):
         self.differential_drive = data
         
-    def proximity_warning_callback(self, data):
-        self.proximity_warning = data
-
     def set_goal(self, goal):
         self.goal = goal
         self.make_plan()
@@ -203,9 +201,6 @@ class Navigator:
         if self.differential_drive is not None:
             heartbeat.values.append(KeyValue('diff drive','l: {:.2f}, r: {:.2f}'.format(self.differential_drive.left_thrust, self.differential_drive.right_thrust)))
             
-        if self.proximity_warning is not None and len(self.proximity_warning.data) >= 4:
-            heartbeat.values.append(KeyValue('proximity port','{:.2f}, {:.2f}'.format(self.proximity_warning.data[0].x, self.proximity_warning.data[0].y)))
-            heartbeat.values.append(KeyValue('proximity stbd','{:.2f}, {:.2f}'.format(self.proximity_warning.data[3].x, self.proximity_warning.data[3].y)))
 
         heartbeat.values.append(KeyValue('---','---'))
         self.helm.publishStatus(heartbeat)
@@ -254,7 +249,7 @@ class Navigator:
                 self.helm.set_goal(None,self.goal)
 
     def search(self):
-        self.helm.status = 'search'
+        self.search_center = self.pose
         
 
 class Helm():
@@ -263,8 +258,12 @@ class Helm():
         self.status = 'idle'
         # allow joystick override by listening to piloting mode
         self.piloting_mode = None
+        self.proximity_warning = None
         
         self.piloting_mode_sub = rospy.Subscriber('/project11/piloting_mode', String, self.piloting_mode_callback)
+
+        self.proximity_warning_sub = rospy.Subscriber('/proximity_warning', ProximityWarning, self.proximity_warning_callback)
+
         self.cmd_vel_publisher = rospy.Publisher('/cmd_vel', Twist, queue_size = 1)
 
         self.dp_hover_action_client = actionlib.SimpleActionClient('DP_hover_action', dp_hover.msg.dp_hoverAction)
@@ -278,9 +277,13 @@ class Helm():
         
         self.uturn_direction = None
 
+        self.react_to_proximity = True
 
     def piloting_mode_callback(self, data):
         self.piloting_mode = data.data
+
+    def proximity_warning_callback(self, data):
+        self.proximity_warning = data
 
     def set_goal(self, step_goal, goal):
         self.step_goal = step_goal
@@ -316,6 +319,9 @@ class Helm():
             heartbeat.values.append(KeyValue('helm goal distance',str(distance)))
         if self.piloting_mode is not None:
             heartbeat.values.append(KeyValue('helm piloting mode',self.piloting_mode))
+        if self.proximity_warning is not None and len(self.proximity_warning.data) >= 4:
+            heartbeat.values.append(KeyValue('proximity port','{:.2f}, {:.2f}'.format(self.proximity_warning.data[0].x, self.proximity_warning.data[0].y)))
+            heartbeat.values.append(KeyValue('proximity stbd','{:.2f}, {:.2f}'.format(self.proximity_warning.data[3].x, self.proximity_warning.data[3].y)))
 
     def iterate(self):
         #rospy.loginfo('status: {} step goal? {} goal? {}'.format(self.status, self.step_goal is not None,  self.goal is not None))
@@ -323,14 +329,14 @@ class Helm():
             if self.piloting_mode != 'manual':
                 if self.status == 'search':
                     t = Twist()
-                    t.linear.x = .1
+                    t.linear.x = .25
                     t.angular.z = .25
                     self.cmd_vel_publisher.publish(t)
                 else:
                     self.cmd_vel_publisher.publish(Twist())
             if self.status == 'dp_hover':
                 self.dp_hover_action_client.cancel_goal()
-            else:
+            elif self.status != 'search':
                 self.status = 'idle'
         else:
             if self.status == 'search':
@@ -379,6 +385,17 @@ class Helm():
                     if overall_distance < 15: # slow down even more
                         speed -= abs(yaw_speed*2)
 
+                    if self.react_to_proximity and overall_distance > 25:
+                        
+                        forward_override, turn_override = self.getSafetyOverrides()
+                        
+                        print 'fwd',forward_override,'turn',turn_override
+                        
+                        if forward_override is not None:
+                            speed += forward_override
+                            
+                        if turn_override is not None:
+                            yaw_speed += turn_override
                     
                     #print 'sugg yaw:', suggested_yaw, 'relative:', relative_bearing, 'speed:', speed, 'yaw rate:', yaw_speed
                     t = Twist()
@@ -391,6 +408,39 @@ class Helm():
                 if self.status != 'dp_hover':
                     self.do_hover(self.goal)
                 
+    def getSafetyOverrides(self):
+        forward = None
+        turn = None
+        if self.proximity_warning is not None and rospy.Time.now() - self.proximity_warning.header.stamp < rospy.Duration(1.0):
+            lx = self.proximity_warning.data[0].x
+            ly = self.proximity_warning.data[0].y
+            left_distance = math.sqrt(lx*lx + ly*ly)
+            left_forward = 0
+            left_turn = 0
+            if left_distance < 25:
+                if ly < lx:
+                    left_forward = (left_distance-25)/15.0
+                else:
+                    left_turn = (left_distance-25)/75.0
+                
+            rx = self.proximity_warning.data[3].x
+            ry = self.proximity_warning.data[3].y
+            right_distance = math.sqrt(rx*rx + ry*ry)
+            right_forward = 0
+            right_turn = 0
+            if right_distance < 25:
+                if abs(ry) < rx:
+                    right_forward = (right_distance-25)/15.0
+                else:
+                    right_turn = (25-right_distance)/75.0
+                    
+            if left_forward != 0 or right_forward != 0:
+                forward = min(left_forward, right_forward)
+                
+            if left_turn != 0 or right_turn != 0:
+                turn = left_turn + right_turn
+            
+        return forward,turn
                 
 
 
@@ -970,7 +1020,7 @@ class GymkhanaTask():
                 current = self.gates.current_gate
                 self.taskManager.camp.markGate(current)
                 if current.isPoseInRadius(our_position):
-                    exit_pose = current.getCenterOffsetPose(current.width)
+                    exit_pose = current.getCenterOffsetPose(current.width/2)
                     self.taskManager.navigator.set_goal(exit_pose)
                     self.status = 'cross gate'
                 else:
@@ -982,7 +1032,7 @@ class GymkhanaTask():
             if self.gates.current_gate is not None:
                 self.status = 'approach gate'
             else:
-                pass # do a search
+                self.taskManager.navigator.search()
 
         if self.gates.finish_gate is not None:
             if self.gates.finish_gate.crossed:
@@ -1067,7 +1117,7 @@ class MarkerManager():
 class GateManager():
     max_gate_separation = 25
     min_gate_separation = 15
-    fudge_factor = 1
+    fudge_factor = 2
 
     def __init__(self):
 
